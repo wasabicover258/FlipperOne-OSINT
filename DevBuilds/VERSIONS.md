@@ -2,6 +2,7 @@
 
 | Version | File | Change |
 |---------|------|--------|
+| 1.1.0 | `DevBuilds/FlipperOne-OSINT-1.1.0-aarch64.AppImage` | More recon techniques feed the tree. New: live TCP connect port scan (nmap -sT style) + banner/service grab on every mapped IP and in the IP module; multi-source subdomains (crt.sh + certspotter + HackerTarget passive DNS, theHarvester style); zone-transfer (AXFR) check (DNSrecon style). Watchdog raised to 150s. |
 | 1.0.0 | `DevBuilds/FlipperOne-OSINT-1.0.0-aarch64.AppImage` | Major content upgrade. Domain = full recon with DNS-over-HTTPS (CAA, DNSSEC, SOA), mail-security grade (SPF lookups, DMARC policy, DKIM selectors, MTA-STS), tech fingerprint, and a chained infrastructure tree (subdomains via crt.sh + DNS sweep -> unique IPs -> ASN/ports/CVEs). IP = RDAP netblock + abuse contact, CPEs, named services. Username = 70+ platforms grouped by category. Email = full security grade. |
 | 0.2.8 | `DevBuilds/FlipperOne-OSINT-0.2.8-aarch64.AppImage` | Step back moved to the [ ] button (measured on the device: Flipper OS itself closes the running app on Bksp, for every app, so no app can use that key); Clear moved onto the on-screen keyboard |
 | 0.2.7 | `DevBuilds/FlipperOne-OSINT-0.2.7-aarch64.AppImage` | Physical Bksp key (arrives as a close request from the system) now only steps back; the app can only be closed with Z (Exit) |

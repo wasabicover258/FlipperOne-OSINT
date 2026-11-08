@@ -116,8 +116,8 @@ func main() {
 
 	// Safety net: stop after 100 seconds.
 	go func() {
-		time.Sleep(100 * time.Second)
-		warn("Aborted: time limit reached")
+		time.Sleep(150 * time.Second)
+		warn("Aborted: time limit reached (150s)")
 		os.Exit(0)
 	}()
 

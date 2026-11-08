@@ -134,6 +134,7 @@ func dnsRecords(d string) {
 			miss("DNSSEC: not signed")
 		}
 	}
+	zoneTransfer(d)
 }
 
 // uniq removes duplicates, preserving order.
@@ -640,11 +641,24 @@ func subdomains(d string) map[string][]string {
 			warn("crt.sh response not readable (maybe too large)")
 		}
 	}
+	// 2) certspotter: a second certificate-transparency source.
+	for _, n := range certspotterSubs(d) {
+		n = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(n), "*."))
+		if n == d || strings.HasSuffix(n, "."+d) {
+			cand[n] = true
+		}
+	}
 	ctLen := len(cand)
 
-	// 2) DNS sweep of common labels, to catch hosts not in any log.
+	// 3) HackerTarget hostsearch: passive DNS that returns the IP directly.
+	htHosts := hackertargetSubs(d)
+
+	// 4) DNS sweep of common labels, to catch hosts not in any log.
 	for _, s := range commonSubs {
 		cand[s+"."+d] = true
+	}
+	for h := range htHosts {
+		cand[h] = true
 	}
 
 	names := make([]string, 0, len(cand))
@@ -677,18 +691,28 @@ func subdomains(d string) map[string][]string {
 	wg.Wait()
 
 	hostIPs := map[string][]string{}
-	live := 0
-	var liveNames []string
 	for _, r := range out {
 		if len(r.ips) > 0 {
 			hostIPs[r.name] = r.ips
-			live++
-			if r.name != d {
-				liveNames = append(liveNames, r.name)
-			}
 		}
 	}
-	info("%d names from logs, %d common labels swept", ctLen-1, len(commonSubs))
+	// Add HackerTarget hosts (their IPs are authoritative even if our live
+	// resolver did not answer for that name).
+	for h, ips := range htHosts {
+		if _, ok := hostIPs[h]; !ok {
+			hostIPs[h] = ips
+		}
+	}
+	live := 0
+	var liveNames []string
+	for n := range hostIPs {
+		live++
+		if n != d {
+			liveNames = append(liveNames, n)
+		}
+	}
+	info("Sources: crt.sh + certspotter logs, HackerTarget, DNS sweep")
+	info("%d names from CT logs, %d common labels swept", ctLen-1, len(commonSubs))
 	info("%d hosts resolve", live)
 	sort.Strings(liveNames)
 	shown := 0
@@ -755,6 +779,26 @@ func infraTree(d string, hostIPs map[string][]string) {
 	}
 	wg.Wait()
 
+	// Live port scan of the mapped IPs (connect scan, focused port list).
+	liveOpen := make([][]int, topN)
+	banners := make([]string, topN)
+	var swg sync.WaitGroup
+	ssem := make(chan struct{}, 6)
+	for i := 0; i < topN; i++ {
+		swg.Add(1)
+		go func(i int) {
+			defer swg.Done()
+			ssem <- struct{}{}
+			defer func() { <-ssem }()
+			op := portScan(ips[i], topPortsLite, 1200*time.Millisecond, 48)
+			liveOpen[i] = op
+			if len(op) > 0 {
+				banners[i] = bannerFor(ips[i], op)
+			}
+		}(i)
+	}
+	swg.Wait()
+
 	totalVulns := 0
 	for i := 0; i < topN; i++ {
 		ip := ips[i]
@@ -774,8 +818,13 @@ func infraTree(d string, hostIPs map[string][]string) {
 		} else {
 			info("   hosts: %s", strings.Join(hs, ", "))
 		}
-		if len(dd.ports) > 0 {
-			info("   ports: %s", shorten(portsStr(dd.ports), 80))
+		if len(liveOpen[i]) > 0 {
+			info("   open now: %s", shorten(portsStr(liveOpen[i]), 76))
+		} else if len(dd.ports) > 0 {
+			info("   ports (Shodan): %s", shorten(portsStr(dd.ports), 72))
+		}
+		if banners[i] != "" {
+			info("   service: %s", banners[i])
 		}
 		if len(dd.vulns) > 0 {
 			totalVulns += len(dd.vulns)

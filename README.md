@@ -12,11 +12,22 @@ phone number, or automated profiling of a private individual.
 
 | Module | What it does |
 |--------|--------------|
-| Domain | Full recon: DNS (A/AAAA/MX/NS/TXT/SOA/CAA via DNS-over-HTTPS), DNSSEC, mail-security grade (SPF lookup budget, DMARC policy, DKIM selectors, MTA-STS), RDAP registration, web server, tech fingerprint, security-header grade, TLS certificate, subdomain discovery (crt.sh + DNS sweep), and a chained **infrastructure tree**: every host grouped by IP, each IP enriched with operator/ASN, open ports and known CVEs |
-| IP | rDNS, ASN and operator (ipinfo.io), RDAP netblock range + abuse contact, open ports with named services, detected software (CPE) and known CVEs (Shodan InternetDB) |
+| Domain | Full recon: DNS (A/AAAA/MX/NS/TXT/SOA/CAA via DNS-over-HTTPS), DNSSEC, zone-transfer (AXFR) check, mail-security grade (SPF lookup budget, DMARC policy, DKIM selectors, MTA-STS), RDAP registration, web server, tech fingerprint, security-header grade, TLS certificate, multi-source subdomain discovery (crt.sh + certspotter + HackerTarget + DNS sweep), and a chained **infrastructure tree**: every host grouped by IP, each IP enriched with operator/ASN, a **live port scan + service banners**, Shodan data and known CVEs |
+| IP | rDNS, ASN and operator (ipinfo.io), RDAP netblock range + abuse contact, a **live TCP port scan with service banners**, plus Shodan InternetDB (ports, software/CPE, known CVEs) |
 | Email | Syntax, role/disposable/free provider, MX and mail provider, plus the full domain mail-security grade (SPF, DMARC, DKIM, MTA-STS), Gravatar, domain registration |
 | Username | Checks 70+ public platforms (grouped: developer, security, social, creative, music, gaming, ...) whether the handle is taken, with a direct link to each profile |
 | Phone | Country, E.164/international format, plausible length, line type (fully offline) |
+
+### Techniques
+
+The tool reimplements the information-gathering techniques of several Kali tools
+as one static binary (nothing is shelled out): certificate-transparency and
+passive-DNS subdomain discovery (crt.sh, certspotter, HackerTarget — theHarvester
+style), DNS enumeration and an AXFR zone-transfer check (DNSrecon style), WHOIS/RDAP,
+TLS and HTTP fingerprinting (WhatWeb style), a live TCP connect port scan with
+banner grabbing (nmap style), and Shodan InternetDB for CVEs. It stays on
+read/reconnaissance techniques and does not include active attack or brute-force
+tooling (no sqlmap, wpscan brute, dir brute-forcing, etc.).
 
 ### The infrastructure tree (domain module)
 

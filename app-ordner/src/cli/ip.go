@@ -3,6 +3,7 @@ package main
 import (
 	"net"
 	"strings"
+	"time"
 )
 
 func runIP(raw string) {
@@ -83,6 +84,35 @@ func runIP(raw string) {
 		warn("Known vulnerabilities (%d): %s", len(d.vulns), strings.Join(v, ", "))
 	} else if d.ok {
 		info("No known CVEs for this address")
+	}
+
+	// Live connect scan of the address itself (nmap-style), plus banners.
+	head("Live port scan")
+	open := portScan(ip.String(), topPortsFull, 1400*time.Millisecond, 80)
+	if len(open) == 0 {
+		miss("No open TCP ports found (of %d probed)", len(topPortsFull))
+		return
+	}
+	found("Open now: %s", shorten(portsStr(open), 90))
+	var svc []string
+	for _, p := range open {
+		if name, ok := wellKnownPort[p]; ok {
+			svc = append(svc, itoa(p)+"/"+name)
+		}
+	}
+	if len(svc) > 0 {
+		info("Services: %s", shorten(strings.Join(svc, ", "), 90))
+	}
+	// Banner-grab the first few open ports for version hints.
+	shown := 0
+	for _, p := range open {
+		if shown >= 5 {
+			break
+		}
+		if b := grabBanner(ip.String(), p); b != "" {
+			info("%d: %s", p, b)
+			shown++
+		}
 	}
 }
 

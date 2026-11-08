@@ -306,3 +306,79 @@ var commonSubs = []string{
 	"ssh", "owa", "exchange", "lync", "sip", "voip", "chat", "forum", "community",
 	"video", "stream", "live", "ns", "email", "mailserver", "relay", "edge",
 }
+
+// ---------------------------------------------------------------------------
+// Additional passive subdomain / host sources (theHarvester / recon-ng style),
+// all free and keyless. Each is best-effort: a source that is down or rate-
+// limited simply contributes nothing.
+// ---------------------------------------------------------------------------
+
+// certspotterSubs pulls names from the certspotter certificate-transparency API.
+func certspotterSubs(d string) []string {
+	url := "https://api.certspotter.com/v1/issuances?domain=" + d +
+		"&include_subdomains=true&expand=dns_names"
+	resp, body, err := get(client, url)
+	if err != nil || resp.StatusCode != 200 {
+		return nil
+	}
+	var rows []struct {
+		DNSNames []string `json:"dns_names"`
+	}
+	if json.Unmarshal(body, &rows) != nil {
+		return nil
+	}
+	var out []string
+	for _, r := range rows {
+		out = append(out, r.DNSNames...)
+	}
+	return out
+}
+
+// hackertargetSubs uses HackerTarget's hostsearch (host,ip per line); it gives
+// the resolving IP directly, which seeds the infrastructure tree.
+func hackertargetSubs(d string) map[string][]string {
+	resp, body, err := get(client, "https://api.hackertarget.com/hostsearch/?q="+d)
+	if err != nil || resp.StatusCode != 200 {
+		return nil
+	}
+	out := map[string][]string{}
+	for _, line := range strings.Split(string(body), "\n") {
+		parts := strings.SplitN(strings.TrimSpace(line), ",", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		host := strings.ToLower(strings.TrimSpace(parts[0]))
+		ip := strings.TrimSpace(parts[1])
+		if host != "" && net.ParseIP(ip) != nil {
+			out[host] = append(out[host], ip)
+		}
+	}
+	return out
+}
+
+// zoneTransfer reports whether the domain's nameservers leak the full zone via
+// AXFR (a serious misconfiguration). It uses HackerTarget's zonetransfer probe.
+func zoneTransfer(d string) {
+	resp, body, err := get(client, "https://api.hackertarget.com/zonetransfer/?q="+d)
+	if err != nil || resp.StatusCode != 200 {
+		return
+	}
+	t := strings.TrimSpace(string(body))
+	low := strings.ToLower(t)
+	switch {
+	case t == "" || strings.Contains(low, "error") || strings.Contains(low, "failed") ||
+		strings.Contains(low, "does not allow") || strings.Contains(low, "refused") ||
+		strings.Contains(low, "timed out") || strings.Contains(low, "no ns"):
+		found("Zone transfer (AXFR): refused (good)")
+	case strings.Contains(low, "api count") || strings.Contains(low, "api limit"):
+		// Source rate-limited; say nothing rather than imply a result.
+	default:
+		lines := 0
+		for _, l := range strings.Split(t, "\n") {
+			if strings.TrimSpace(l) != "" {
+				lines++
+			}
+		}
+		warn("Zone transfer (AXFR) ALLOWED - full DNS zone exposed (%d records)", lines)
+	}
+}
