@@ -13,7 +13,7 @@ import urllib.error
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 INPUT_TYPES = {
     "username": "Username",
     "realname": "Echter Name",

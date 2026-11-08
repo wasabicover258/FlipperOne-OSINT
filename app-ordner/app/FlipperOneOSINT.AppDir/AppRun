@@ -1,7 +1,24 @@
 #!/bin/sh
-HERE="$(dirname "$(readlink -f "$0")")"
+# FlipperOne-OSINT: Start wie bei einer echten Flipper-App.
+# Ausserhalb des Panels wird das Bundle an flipctl uebergeben,
+# im Panel (FLIPCTL_HOSTED) startet die App selbst.
+set -eu
+APPDIR=${APPDIR:-$(cd "$(dirname "$0")" && pwd)}
+export APPDIR
+
+LOG="${TMPDIR:-/tmp}/flipperone-osint.log"
+{
+  echo "== $(date) Start"
+  echo "FLIPCTL_HOSTED=${FLIPCTL_HOSTED:-} WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-} DISPLAY=${DISPLAY:-}"
+  command -v python3 || echo "python3 fehlt"
+} >> "$LOG" 2>&1 || true
+
+if [ -z "${FLIPCTL_HOSTED:-}" ] && command -v flipctl >/dev/null 2>&1; then
+  exec flipctl open "${APPIMAGE:-$0}"
+fi
+
 if ! command -v python3 >/dev/null 2>&1; then
-  echo "python3 wird benoetigt (sudo apt install python3)" >&2
+  echo "python3 wird benoetigt" >&2
   exit 1
 fi
-exec python3 -I "$HERE/usr/share/osint/app.py" "$@"
+exec python3 -I "$APPDIR/usr/share/osint/app.py" "$@"

@@ -1,0 +1,4 @@
+# FlipperOne-OSINT: Eintrag für das Flipper-One-App-Regal
+name = "OSINT"
+icon = "flipperone-osint.png"
+wayland = "./AppRun"
