@@ -19,13 +19,13 @@ var roleAccounts = map[string]bool{
 }
 
 var freeProviders = map[string]string{
-	"gmail.com": "GOOGLE GMAIL", "googlemail.com": "GOOGLE GMAIL", "outlook.com": "MICROSOFT OUTLOOK",
-	"hotmail.com": "MICROSOFT HOTMAIL", "live.com": "MICROSOFT LIVE", "yahoo.com": "YAHOO",
-	"yahoo.de": "YAHOO", "gmx.de": "GMX", "gmx.net": "GMX", "gmx.at": "GMX", "gmx.ch": "GMX",
-	"web.de": "WEB.DE", "t-online.de": "T-ONLINE", "icloud.com": "APPLE ICLOUD", "me.com": "APPLE",
-	"proton.me": "PROTON", "protonmail.com": "PROTON", "pm.me": "PROTON", "mailbox.org": "MAILBOX.ORG",
-	"posteo.de": "POSTEO", "freenet.de": "FREENET", "aol.com": "AOL", "zoho.com": "ZOHO",
-	"tutanota.com": "TUTA", "tuta.io": "TUTA", "tutamail.com": "TUTA", "msn.com": "MICROSOFT MSN",
+	"gmail.com": "Google Gmail", "googlemail.com": "Google Gmail", "outlook.com": "Microsoft Outlook",
+	"hotmail.com": "Microsoft Hotmail", "live.com": "Microsoft Live", "yahoo.com": "Yahoo",
+	"yahoo.de": "Yahoo", "gmx.de": "GMX", "gmx.net": "GMX", "gmx.at": "GMX", "gmx.ch": "GMX",
+	"web.de": "WEB.DE", "t-online.de": "T-Online", "icloud.com": "Apple iCloud", "me.com": "Apple",
+	"proton.me": "Proton", "protonmail.com": "Proton", "pm.me": "Proton", "mailbox.org": "mailbox.org",
+	"posteo.de": "Posteo", "freenet.de": "freenet", "aol.com": "AOL", "zoho.com": "Zoho",
+	"tutanota.com": "Tuta", "tuta.io": "Tuta", "tutamail.com": "Tuta", "msn.com": "Microsoft MSN",
 }
 
 var disposableDomains = map[string]bool{
@@ -38,72 +38,72 @@ var disposableDomains = map[string]bool{
 	"wegwerfemail.de": true, "wegwerfmail.de": true, "trash-mail.com": true, "discard.email": true,
 }
 
-// Anbieter anhand des Mailservers erkennen.
+// Detect the provider from the mail server.
 var mxProviders = []struct{ suffix, name string }{
-	{"google.com.", "GOOGLE WORKSPACE / GMAIL"},
-	{"googlemail.com.", "GOOGLE WORKSPACE / GMAIL"},
-	{"protection.outlook.com.", "MICROSOFT 365"},
-	{"outlook.com.", "MICROSOFT OUTLOOK"},
-	{"pphosted.com.", "PROOFPOINT (MAIL-FILTER)"},
-	{"mimecast.com.", "MIMECAST (MAIL-FILTER)"},
-	{"protonmail.ch.", "PROTON"},
-	{"proton.me.", "PROTON"},
-	{"icloud.com.", "APPLE ICLOUD"},
-	{"yahoodns.net.", "YAHOO"},
+	{"google.com.", "Google Workspace / Gmail"},
+	{"googlemail.com.", "Google Workspace / Gmail"},
+	{"protection.outlook.com.", "Microsoft 365"},
+	{"outlook.com.", "Microsoft Outlook"},
+	{"pphosted.com.", "Proofpoint (mail filter)"},
+	{"mimecast.com.", "Mimecast (mail filter)"},
+	{"protonmail.ch.", "Proton"},
+	{"proton.me.", "Proton"},
+	{"icloud.com.", "Apple iCloud"},
+	{"yahoodns.net.", "Yahoo"},
 	{"kundenserver.de.", "IONOS / 1&1"},
 	{"ionos.de.", "IONOS"},
 	{"ionos.com.", "IONOS"},
 	{"web.de.", "WEB.DE"},
 	{"gmx.net.", "GMX"},
-	{"t-online.de.", "T-ONLINE"},
-	{"zoho.com.", "ZOHO"},
-	{"zoho.eu.", "ZOHO"},
-	{"mailbox.org.", "MAILBOX.ORG"},
-	{"secureserver.net.", "GODADDY"},
-	{"hostinger.com.", "HOSTINGER"},
+	{"t-online.de.", "T-Online"},
+	{"zoho.com.", "Zoho"},
+	{"zoho.eu.", "Zoho"},
+	{"mailbox.org.", "mailbox.org"},
+	{"secureserver.net.", "GoDaddy"},
+	{"hostinger.com.", "Hostinger"},
 	{"strato.de.", "STRATO"},
-	{"hetzner.com.", "HETZNER"},
-	{"your-server.de.", "HETZNER"},
+	{"hetzner.com.", "Hetzner"},
+	{"your-server.de.", "Hetzner"},
 }
 
 func runEmail(addr string) {
 	addr = strings.TrimSpace(addr)
-	head("E-MAIL-CHECK: %s", addr)
+	head("Email check: %s", addr)
 	if !emailRe.MatchString(addr) {
-		warn("UNGUELTIGE SYNTAX (ERWARTET: NAME@DOMAIN.TLD)")
+		warn("Invalid syntax (expected: name@domain.tld)")
 		return
 	}
-	found("SYNTAX GUELTIG")
+	found("Syntax valid")
 	at := strings.LastIndex(addr, "@")
 	local, domain := addr[:at], strings.ToLower(addr[at+1:])
 
-	// Lokaler Teil
+	// Local part
 	base := strings.ToLower(local)
 	if i := strings.Index(base, "+"); i > 0 {
-		info("PLUS-ADRESSIERUNG: TAG '%s', BASIS '%s'", base[i+1:], base[:i])
+		info("Plus addressing: tag '%s', base '%s'", base[i+1:], base[:i])
 		base = base[:i]
 	}
 	if roleAccounts[base] {
-		info("FUNKTIONSADRESSE (%s), KEINE PERSON", base)
+		info("Role account (%s), not a person", base)
 	}
 
-	// Domain-Art
+	// Domain type
 	if p, ok := freeProviders[domain]; ok {
-		info("KOSTENLOSER ANBIETER: %s", p)
+		info("Free provider: %s", p)
 	}
 	if disposableDomains[domain] {
-		warn("WEGWERF-ADRESSE (EINMAL-MAILBOX)")
+		warn("Disposable address (throwaway mailbox)")
 	}
 
-	// Mailserver
-	head("MAILSERVER")
+	// Mail server
+	head("Mail server")
 	ctx, cancel := dnsCtx(6)
 	mxs, err := net.DefaultResolver.LookupMX(ctx, domain)
 	cancel()
 	if err != nil || len(mxs) == 0 {
-		warn("KEIN MX-EINTRAG: DOMAIN NIMMT EVTL. KEINE MAILS AN")
+		warn("No MX record: domain may not accept mail")
 		if len(ipsOf(domain)) == 0 {
-			warn("DOMAIN LOEST NICHT AUF")
+			warn("Domain does not resolve")
 		}
 	} else {
 		provider := ""
@@ -118,7 +118,7 @@ func runEmail(addr string) {
 			}
 		}
 		if provider != "" {
-			info("MAIL-ANBIETER: %s", provider)
+			info("Mail provider: %s", provider)
 		}
 	}
 
@@ -143,32 +143,32 @@ func runEmail(addr string) {
 	if spf != "" {
 		found("SPF: %s", shorten(spf, 90))
 	} else {
-		miss("SPF: KEIN EINTRAG")
+		miss("SPF: no record")
 	}
 	if dmarc != "" {
 		found("DMARC: %s", shorten(dmarc, 90))
 	} else {
-		miss("DMARC: KEIN EINTRAG")
+		miss("DMARC: no record")
 	}
 
-	// Gravatar (nur Existenz des Bildes)
-	head("OEFFENTLICHE SPUREN")
+	// Gravatar (only whether an image exists)
+	head("Public traces")
 	sum := md5.Sum([]byte(strings.ToLower(addr)))
 	gurl := "https://www.gravatar.com/avatar/" + hex.EncodeToString(sum[:]) + "?d=404"
 	if resp, _, err := get(client, gurl); err != nil {
-		warn("GRAVATAR: KEINE ANTWORT")
+		warn("Gravatar: no response")
 	} else if resp.StatusCode == 200 {
-		found("GRAVATAR: PROFILBILD VORHANDEN")
+		found("Gravatar: profile picture exists")
 	} else if resp.StatusCode == 404 {
-		miss("GRAVATAR: KEIN PROFILBILD")
+		miss("Gravatar: no profile picture")
 	} else {
-		warn("GRAVATAR: HTTP %d", resp.StatusCode)
+		warn("Gravatar: HTTP %d", resp.StatusCode)
 	}
 
-	// Domain-Registrierung (nicht fuer kostenlose Anbieter)
+	// Domain registration (not for free providers)
 	if _, free := freeProviders[domain]; !free {
-		head("DOMAIN %s", domain)
+		head("Domain %s", domain)
 		rdapSummary(domain)
 	}
-	info("KEINE POSTFACH-PRUEFUNG (KEIN KONTAKT ZUM MAILSERVER)")
+	info("No mailbox check (no contact with the mail server)")
 }

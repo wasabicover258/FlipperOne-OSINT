@@ -1,6 +1,7 @@
-/* osint-ui: Oberflaeche von FlipperOne-OSINT (SDL2, 256x144, wie die TestApp).
- * Aufruf: osint-ui <pfad-zu-osint-cli>
- * Bedienung: Tastatur (Hoch/Runter, Enter, Esc, Text tippen, Strg+V) und Maus.
+/* osint-ui: user interface of FlipperOne-OSINT (SDL2, 256x144 like the TestApp).
+ * Usage: osint-ui <path-to-osint-cli>
+ * Input: touch/mouse, on-screen keyboard, the Flipper One buttons below the
+ * screen (they arrive as the keys Z X C V B), arrow keys, Enter, Esc.
  */
 #define _GNU_SOURCE
 #include <SDL.h>
@@ -31,12 +32,12 @@
 
 typedef struct { Uint8 r, g, b; } Color;
 /* Orange-Stil wie die Flipper-Apps (z.B. nmap) */
-static const Color C_BG = {240, 138, 36};    /* Hintergrund */
-static const Color C_INK = {34, 17, 0};      /* Text / Rahmen */
-static const Color C_PANEL = {251, 166, 68}; /* Felder / Tasten */
-static const Color C_DARK = {196, 98, 4};    /* Abschnittsbalken */
-static const Color C_SOFT = {120, 58, 0};    /* Nebentext */
-static const Color C_LIGHT = {255, 176, 80}; /* Schrift auf Schwarz */
+static const Color C_BG = {255, 136, 0};     /* background (Flipper One orange) */
+static const Color C_INK = {34, 17, 0};      /* text / outlines */
+static const Color C_PANEL = {255, 156, 30}; /* menu rows / keys */
+static const Color C_DARK = {200, 100, 0};   /* input field / section bars */
+static const Color C_SOFT = {125, 60, 0};    /* secondary text */
+static const Color C_LIGHT = {255, 176, 80}; /* text on black */
 
 /* ---------- 5x7-Schrift ---------- */
 typedef struct { char c; const char *r[7]; } Glyph;
@@ -118,20 +119,20 @@ typedef struct {
 } Mode;
 
 static const Mode modes[NMODES] = {
-    {"USERNAME", "username", "USERNAME", "BEISPIEL: MAXMUSTER",
-     "PRUEFT, OB DER NAME AUF UEBER 30", "OEFFENTLICHEN PLATTFORMEN VERGEBEN IST."},
-    {"E-MAIL-ADRESSE", "email", "E-MAIL-ADRESSE", "BEISPIEL: NAME@BEISPIEL.DE",
-     "SYNTAX, MAILSERVER, SPF/DMARC,", "GRAVATAR, ANBIETER, DOMAIN-DATEN."},
-    {"TELEFONNUMMER", "phone", "TELEFONNUMMER", "BEISPIEL: +49 171 1234567",
-     "LAND, FORMAT UND LEITUNGSART", "(OFFLINE). KEINE HALTERABFRAGE."},
-    {"DOMAIN / WEBSEITE", "domain", "DOMAIN", "BEISPIEL: BEISPIEL.DE",
-     "DNS, REGISTRAR, WEBSERVER, TLS, HEADER", "UND SUBDOMAINS (ZERTIFIKATS-LOGS)."},
-    {"IP-ADRESSE", "ip", "IP-ADRESSE", "BEISPIEL: 8.8.8.8",
-     "RDNS, BETREIBER, LAND, OFFENE PORTS", "UND BEKANNTE SCHWACHSTELLEN."},
-    {"NAME -> USERNAMES", "name", "VOR- UND NACHNAME", "BEISPIEL: MAX MUSTERMANN",
-     "ERZEUGT USERNAME-VARIANTEN AUS EINEM", "NAMEN (NUR TEXT, KEINE SUCHE)."},
-    {"HILFE / INFO", NULL, NULL, NULL, "BEDIENUNG UND HINWEISE.", ""},
-    {"TASTEN-TEST", NULL, NULL, NULL, "ZEIGT DIE CODES DER FLIPPER-TASTEN", "(X, MENUE, OK ...) UND DES TOUCHS."},
+    {"USERNAME", "username", "USERNAME", "e.g. maxmuster",
+     "Checks whether the name is taken on", "30+ public platforms."},
+    {"EMAIL ADDRESS", "email", "EMAIL ADDRESS", "e.g. name@example.com",
+     "Syntax, mail server, SPF/DMARC,", "Gravatar, provider, domain data."},
+    {"PHONE NUMBER", "phone", "PHONE NUMBER", "e.g. +49 171 1234567",
+     "Country, format and line type", "(offline). No owner lookup."},
+    {"DOMAIN / WEBSITE", "domain", "DOMAIN", "e.g. example.com",
+     "DNS, registrar, web server, TLS,", "headers and subdomains (cert logs)."},
+    {"IP ADDRESS", "ip", "IP ADDRESS", "e.g. 8.8.8.8",
+     "rDNS, operator, country, open ports", "and known vulnerabilities."},
+    {"NAME -> USERNAMES", "name", "FIRST AND LAST NAME", "e.g. Max Mustermann",
+     "Generates username variants from a", "name (text only, no search)."},
+    {"HELP / INFO", NULL, NULL, NULL, "Controls and notes.", ""},
+    {"KEY TEST", NULL, NULL, NULL, "Shows the codes of the Flipper buttons", "and of touch input."},
 };
 
 enum { S_MENU, S_INPUT, S_RUN, S_HELP, S_KEYS };
@@ -157,6 +158,42 @@ static const char *cli_path = "osint-cli";
 static char keylog[NKEYLOG][44];
 static int keylog_n = 0, esc_streak = 0;
 static int drag_active = 0, drag_last_y = 0, drag_acc = 0;
+static char btn_char = 0;          /* last Flipper button seen as a letter key (to drop its text event) */
+static int shift_on = 0;           /* on-screen keyboard: next letter is upper case */
+static int flash_row = -1, flash_col = -1;
+static Uint32 flash_until = 0;
+
+/* ---------- on-screen keyboard ---------- */
+enum { K_CHAR, K_BKSP, K_SHIFT, K_SPACE };
+typedef struct { int x, w; char ch; int kind; } Key;
+#define OSK_ROWS 5
+#define OSK_Y0 36
+#define OSK_RH 18
+#define OSK_CELL 25
+static Key osk[OSK_ROWS][10];
+static int osk_n[OSK_ROWS];
+
+static void osk_add(int r, int cell, int span, char ch, int kind) {
+    Key *k = &osk[r][osk_n[r]++];
+    k->x = 3 + cell * OSK_CELL;
+    k->w = span * OSK_CELL - 2;
+    k->ch = ch;
+    k->kind = kind;
+}
+
+static void osk_init(void) {
+    const char *r0 = "1234567890", *r1 = "qwertyuiop", *r2 = "asdfghjkl", *r3 = "zxcvbnm.-";
+    for (int i = 0; i < 10; i++) osk_add(0, i, 1, r0[i], K_CHAR);
+    for (int i = 0; i < 10; i++) osk_add(1, i, 1, r1[i], K_CHAR);
+    for (int i = 0; i < 9; i++) osk_add(2, i, 1, r2[i], K_CHAR);
+    osk_add(2, 9, 1, 0, K_BKSP);
+    osk_add(3, 0, 1, 0, K_SHIFT);
+    for (int i = 0; i < 9; i++) osk_add(3, 1 + i, 1, r3[i], K_CHAR);
+    const char *r4 = "@_+:/";
+    for (int i = 0; i < 5; i++) osk_add(4, i, 1, r4[i], K_CHAR);
+    osk_add(4, 5, 4, ' ', K_SPACE);
+    osk_add(4, 9, 1, ',', K_CHAR);
+}
 
 static void log_event(const char *fmt, int a, int b, const char *name) {
     for (int i = NKEYLOG - 1; i > 0; i--) memcpy(keylog[i], keylog[i - 1], sizeof keylog[0]);
@@ -225,21 +262,35 @@ static void title(const char *left, const char *right) {
     rect(0, CH - 1, W, 1, C_INK);
 }
 
-static void tab(int x, const char *s, int primary) {
+/* Rounded box: outline + fill, corner pixels cut. */
+static void rbox(int x, int y, int w, int h, Color line, Color fill) {
+    rect(x, y, w, h, line);
+    rect(x + 1, y + 1, w - 2, h - 2, fill);
+    rect(x, y, 1, 1, C_BG);
+    rect(x + w - 1, y, 1, 1, C_BG);
+    rect(x, y + h - 1, 1, 1, C_BG);
+    rect(x + w - 1, y + h - 1, 1, 1, C_BG);
+}
+
+/* The 5 Flipper buttons below the screen = 5 tab slots: Z X C V B.
+ * Slot 2 (C) is the power button and carries no label. */
+#define SLOTW 51
+static void tab(int slot, const char *s, int primary) {
     if (!s || !*s) return;
-    int w = 80, y = H - TABH;
+    int x = 1 + slot * SLOTW, w = SLOTW - 2, y = H - TABH;
     rect(x, y, w, TABH, C_INK);
     rect(x + 1, y + 1, w - 2, TABH - 1, primary ? C_INK : C_PANEL);
-    rect(x, y, 1, 1, C_BG); /* runde Ecken oben */
+    rect(x, y, 1, 1, C_BG);
     rect(x + w - 1, y, 1, 1, C_BG);
     int tw = (int)strlen(s) * CW;
     text_px(x + (w - tw) / 2, y + 3, s, primary ? C_LIGHT : C_INK);
 }
 
-static void softkeys(const char *l, const char *m, const char *r) {
-    tab(2, l, 0);
-    tab(88, m, 0);
-    tab(174, r, 1);
+static void softkeys(const char *z, const char *x, const char *v, const char *b) {
+    tab(0, z, 0);
+    tab(1, x, 0);
+    tab(3, v, 0);
+    tab(4, b, 1);
 }
 
 /* ---------- Ergebniszeilen ---------- */
@@ -378,12 +429,12 @@ static void pump(void) {
         finished = 1;
         if (!got_output) {
             if (WIFEXITED(status) && WEXITSTATUS(status) == 127)
-                push_result("! BACKEND (OSINT-CLI) NICHT GEFUNDEN");
+                push_result("! Backend (osint-cli) not found");
             else
-                push_result("! KEINE AUSGABE VOM BACKEND");
+                push_result("! No output from backend");
         } else if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
             char b[64];
-            snprintf(b, sizeof b, "! BACKEND BEENDET MIT CODE %d", WEXITSTATUS(status));
+            snprintf(b, sizeof b, "! Backend exited with code %d", WEXITSTATUS(status));
             push_result(b);
         }
         return;
@@ -404,7 +455,7 @@ static void start_run(void) {
     got_output = 0;
     screen = S_RUN;
     if (spawn_cli(modes[mode_idx].cmd, in) != 0) {
-        push_result("! BACKEND KONNTE NICHT GESTARTET WERDEN");
+        push_result("! Could not start backend");
         finished = 1;
     } else {
         running = 1;
@@ -467,23 +518,33 @@ static void on_key(const SDL_KeyboardEvent *k, char *kbuf) {
     SDL_Keycode s = k->keysym.sym;
     Uint16 mod = k->keysym.mod;
     int enter = (s == SDLK_RETURN || s == SDLK_KP_ENTER);
-    log_event("TASTE %s SYM=%X SC=%d", (int)s, (int)k->keysym.scancode, SDL_GetKeyName(s));
+    log_event("KEY %s SYM=%X SC=%d", (int)s, (int)k->keysym.scancode, SDL_GetKeyName(s));
     if (screen == S_KEYS) {
-        if (s == SDLK_ESCAPE || s == SDLK_BACKSPACE || s == SDLK_AC_BACK || s == SDLK_CANCEL) {
+        if (s == SDLK_ESCAPE || s == SDLK_BACKSPACE || s == SDLK_AC_BACK || s == SDLK_CANCEL || s == 'z') {
             if (++esc_streak >= 3) screen = S_MENU;
         } else {
             esc_streak = 0;
         }
         return;
     }
-    /* Flipper-Tasten: X = zurueck, Menue = Hilfe/Neu/Einfuegen, Haken = OK */
+    /* The five Flipper buttons arrive as the keys Z X C V B (left to right):
+     * Z = back, X = menu, C = power (ignored), V = view/page, B = OK. */
+    if (!(mod & (KMOD_CTRL | KMOD_ALT | KMOD_GUI | KMOD_SHIFT))) {
+        if (s == 'z') { btn_char = 'z'; softkey(0); return; }
+        if (s == 'x') { btn_char = 'x'; softkey(1); return; }
+        if (s == 'c') { btn_char = 'c'; return; }
+        if (s == 'v') { btn_char = 'v'; softkey(3); return; }
+        if (s == 'b') { btn_char = 'b'; softkey(4); return; }
+    }
+    /* other back/menu/ok key codes */
     if (s == SDLK_AC_BACK || s == SDLK_CANCEL) { softkey(0); return; }
     if (s == SDLK_MENU || s == SDLK_APPLICATION) { softkey(1); return; }
-    if (s == SDLK_SELECT || s == SDLK_EXECUTE) { softkey(2); return; }
-    if (screen == S_RUN && (s == SDLK_F4 || s == SDLK_PRINTSCREEN || s == SDLK_TAB || s == SDLK_SPACE)) { softkey(2); return; }
+    if (s == SDLK_SELECT || s == SDLK_EXECUTE) { softkey(4); return; }
+    if (screen == S_RUN && (s == SDLK_F4 || s == SDLK_PRINTSCREEN || s == SDLK_TAB || s == SDLK_SPACE)) { softkey(3); return; }
     if (s == SDLK_F1) { softkey(0); return; }
     if (s == SDLK_F2) { softkey(1); return; }
-    if (s == SDLK_F3) { softkey(2); return; }
+    if (s == SDLK_F3) { softkey(4); return; }
+    if (s == SDLK_F4) { softkey(3); return; }
     switch (screen) {
     case S_MENU:
         if (s == SDLK_UP) sel = (sel + NMODES - 1) % NMODES;
@@ -525,34 +586,65 @@ static void on_key(const SDL_KeyboardEvent *k, char *kbuf) {
     }
 }
 
+static Key *osk_hit(int x, int y, int *row) {
+    int r = (y - OSK_Y0) / OSK_RH;
+    if (y < OSK_Y0 || r < 0 || r >= OSK_ROWS || (y - OSK_Y0) % OSK_RH >= 16) return NULL;
+    for (int i = 0; i < osk_n[r]; i++)
+        if (x >= osk[r][i].x && x < osk[r][i].x + osk[r][i].w) {
+            *row = r;
+            flash_row = r;
+            flash_col = i;
+            flash_until = SDL_GetTicks() + 120;
+            return &osk[r][i];
+        }
+    return NULL;
+}
+
+static void osk_press(const Key *k) {
+    char *in = inputs[mode_idx];
+    size_t l = strlen(in);
+    switch (k->kind) {
+    case K_BKSP: if (l > 0) in[l - 1] = 0; break;
+    case K_SHIFT: shift_on = !shift_on; break;
+    default: {
+        char c = k->ch;
+        if (shift_on && c >= 'a' && c <= 'z') c = (char)(c - 32);
+        if (l < MAXIN) { in[l] = c; in[l + 1] = 0; }
+        shift_on = 0;
+    }
+    }
+}
+
 #define MENU_Y0 13
 #define MENU_P 10
 
+/* n = button slot: 0 = Z, 1 = X, 3 = V, 4 = B */
 static void softkey(int n) {
     switch (screen) {
     case S_MENU:
         if (n == 0) quit = 1;
         else if (n == 1) screen = S_HELP;
-        else activate(sel);
+        else if (n == 4) activate(sel);
         break;
     case S_INPUT:
         if (n == 0) screen = S_MENU;
-        else if (n == 1) {
-            char *cb = SDL_GetClipboardText();
-            if (cb) { append_input(cb); SDL_free(cb); }
-        } else start_run();
+        else if (n == 1) inputs[mode_idx][0] = 0;
+        else if (n == 3) {
+            size_t l = strlen(inputs[mode_idx]);
+            if (l > 0) inputs[mode_idx][l - 1] = 0;
+        } else if (n == 4) start_run();
         break;
     case S_RUN:
         if (n == 0) go_back_from_run();
-        else if (n == 1) { if (finished) start_run(); }
-        else {
+        else if (n == 1) scroll_by(-MAXLINES);
+        else if (n == 3) {
             int max = nlines > VH ? nlines - VH : 0;
             if (scroll_pos >= max) scroll_by(-MAXLINES);
             else scroll_by(VH - 1);
-        }
+        } else if (n == 4 && finished) start_run();
         break;
     case S_HELP:
-        screen = S_MENU;
+        if (n == 0 || n == 4) screen = S_MENU;
         break;
     case S_KEYS:
         if (n == 0) screen = S_MENU;
@@ -565,13 +657,19 @@ static void on_click(int px, int py) {
     SDL_GetWindowSize(win, &ww, &wh);
     if (ww <= 0 || wh <= 0) return;
     int x = px * W / ww, y = py * H / wh;
-    log_event("%s X=%d Y=%d", x, y, "KLICK");
+    log_event("%s X=%d Y=%d", x, y, "TOUCH");
     if (screen == S_KEYS) {
         if (y >= H - TABH && x < 86) screen = S_MENU;
         return;
     }
     if (y >= H - TABH) {
-        softkey(x < 86 ? 0 : (x < 172 ? 1 : 2));
+        softkey(x / SLOTW);
+        return;
+    }
+    if (screen == S_INPUT) {
+        int row = 0;
+        Key *k = osk_hit(x, y, &row);
+        if (k) osk_press(k);
         return;
     }
     if (screen == S_MENU) {
@@ -607,47 +705,62 @@ static void draw_menu(void) {
         int y = MENU_Y0 + i * MENU_P;
         char b[COLS + 1];
         snprintf(b, sizeof b, "%d  %s", i + 1, modes[i].label);
-        rect(4, y - 1, W - 8, 10, C_INK);
-        if (i == sel) {
-            text_px(10, y, b, C_LIGHT);
-        } else {
-            rect(5, y, W - 10, 8, C_PANEL);
-            text_px(10, y, b, C_INK);
-        }
+        rbox(4, y - 1, W - 8, 10, C_INK, i == sel ? C_INK : C_PANEL);
+        text_px(10, y, b, i == sel ? C_LIGHT : C_INK);
     }
     text_px(4, 99, modes[sel].d1, C_SOFT);
     text_px(4, 108, modes[sel].d2, C_SOFT);
-    softkeys("ENDE", "HILFE", "OEFFNEN");
+    softkeys("EXIT", "HELP", NULL, "OPEN");
+}
+
+static void draw_osk(void) {
+    for (int r = 0; r < OSK_ROWS; r++) {
+        int y = OSK_Y0 + r * OSK_RH;
+        for (int i = 0; i < osk_n[r]; i++) {
+            const Key *k = &osk[r][i];
+            int flash = (r == flash_row && i == flash_col && SDL_GetTicks() < flash_until);
+            int dark = flash || (k->kind == K_SHIFT && shift_on);
+            rbox(k->x, y, k->w, 16, C_INK, dark ? C_INK : C_PANEL);
+            const char *lab;
+            char one[2] = {k->ch, 0};
+            switch (k->kind) {
+            case K_BKSP: lab = "<"; break;
+            case K_SHIFT: lab = "^"; break;
+            case K_SPACE: lab = "SPACE"; break;
+            default: lab = one;
+            }
+            int tw = (int)strlen(lab) * CW;
+            text_px(k->x + (k->w - tw) / 2, y + 4, lab, dark ? C_LIGHT : C_INK);
+        }
+    }
 }
 
 static void draw_input(void) {
     const Mode *m = &modes[mode_idx];
-    char t[COLS + 1];
-    snprintf(t, sizeof t, "%s", m->prompt);
-    title("OSINT", t);
-    text_px(4, 16, m->prompt, C_INK);
-    rect(4, 27, W - 8, 14, C_INK);
-    rect(5, 28, W - 10, 12, C_PANEL);
+    title("OSINT", m->prompt);
+    rbox(4, 10, W - 8, 14, C_INK, C_DARK);
     const char *in = inputs[mode_idx];
     int l = (int)strlen(in);
-    int vis = (W - 24) / CW;
-    const char *shown = l > vis ? in + (l - vis) : in;
-    text_px(10, 31, shown, C_INK);
-    int cx = 10 + (int)strlen(shown) * CW;
-    if ((SDL_GetTicks() / 500) % 2 == 0 && cx < W - 8) put_char(cx, 31, '_', C_INK);
-    text_px(4, 48, m->example, C_SOFT);
-    text_px(4, 72, "NUR FUER EIGENE DATEN ODER MIT", C_SOFT);
-    text_px(4, 81, "EINWILLIGUNG DER BETROFFENEN NUTZEN.", C_SOFT);
-    softkeys("ZURUECK", "EINFUEGEN", "START");
+    if (l == 0) {
+        text_px(10, 14, m->example, C_SOFT);
+        if ((SDL_GetTicks() / 500) % 2 == 0) put_char(10, 14, '_', C_INK);
+    } else {
+        int vis = (W - 24) / CW;
+        const char *shown = l > vis ? in + (l - vis) : in;
+        text_px(10, 14, shown, C_INK);
+        int cx = 10 + (int)strlen(shown) * CW;
+        if ((SDL_GetTicks() / 500) % 2 == 0 && cx < W - 8) put_char(cx, 14, '_', C_INK);
+    }
+    text_px(4, 26, "Own data or with consent only.", C_SOFT);
+    draw_osk();
+    softkeys("BACK", "CLEAR", "DEL", "START");
 }
 
 static void draw_run(void) {
-    const Mode *m = &modes[mode_idx];
     static const char spin[] = "|/-\\";
     char right[24];
-    if (running) snprintf(right, sizeof right, "%c LAEUFT", spin[(SDL_GetTicks() / 120) % 4]);
-    else snprintf(right, sizeof right, "FERTIG");
-    (void)m;
+    if (running) snprintf(right, sizeof right, "%c RUNNING", spin[(SDL_GetTicks() / 120) % 4]);
+    else snprintf(right, sizeof right, "DONE");
     title("OSINT", right);
     static const Color kc[5] = {{34, 17, 0}, {0, 84, 22}, {128, 64, 0}, {150, 18, 0}, {34, 17, 0}};
     for (int r = 0; r < VH; r++) {
@@ -666,36 +779,36 @@ static void draw_run(void) {
         rect(W - 3, CH, 2, track, C_DARK);
         rect(W - 3, ty, 2, th, C_INK);
     }
-    if (running) softkeys("STOP", NULL, "SEITE");
-    else softkeys("ZURUECK", "NEU", "SEITE");
+    if (running) softkeys("STOP", "TOP", "PAGE", NULL);
+    else softkeys("BACK", "TOP", "PAGE", "AGAIN");
 }
 
 static void draw_help(void) {
-    title("HILFE / INFO", "V" APP_VERSION);
+    title("HELP / INFO", "V" APP_VERSION);
     static const char *h[] = {
-        "ALLROUNDER FUER OEFFENTLICHE INFOS:",
-        "USERNAME, E-MAIL, TELEFON, DOMAIN, IP.",
+        "All-in-one tool for public information:",
+        "username, email, phone, domain, IP.",
         "",
-        "FLIPPER-TASTEN: X = ZURUECK, MENUE = HILFE,",
-        "HAKEN = OK. PFEILE, ENTER, ESC, F1-F3 UND",
-        "TOUCH/MAUS (WISCHEN = SCROLLEN) GEHEN AUCH.",
+        "Buttons below the screen = tabs above them",
+        "(X back, Menu, Backspace, Check = OK).",
+        "Touch / mouse also works (swipe to scroll).",
         "",
-        "WICHTIG: NUR FUER EIGENE DATEN ODER",
-        "MIT EINWILLIGUNG DER BETROFFENEN.",
-        "KEINE PERSONENSUCHE, KEINE HALTERABFRAGE.",
+        "IMPORTANT: only for your own data or",
+        "with the consent of the people involved.",
+        "No people search, no owner lookup.",
     };
     static const Color red = {150, 18, 0};
     for (size_t i = 0; i < sizeof h / sizeof h[0]; i++)
         text_px(4, 14 + (int)i * 10, h[i], i >= 7 ? red : C_INK);
-    softkeys(NULL, NULL, "ZURUECK");
+    softkeys("BACK", NULL, NULL, NULL);
 }
 
 static void draw_keys(void) {
-    title("TASTEN-TEST", "");
-    text_px(4, 12, "DRUECKE TASTEN / TIPPE AUF DEN SCHIRM:", C_INK);
+    title("KEY TEST", "");
+    text_px(4, 12, "Press buttons / tap the screen:", C_INK);
     for (int i = 0; i < keylog_n; i++) text_px(4, 24 + i * 10, keylog[i], i == 0 ? C_INK : C_SOFT);
-    text_px(4, 116, "3X X-TASTE = ZURUECK", C_SOFT);
-    softkeys("ZURUECK", NULL, NULL);
+    text_px(4, 116, "Z button 3x = back", C_SOFT);
+    softkeys("BACK", NULL, NULL, NULL);
 }
 
 static void render(void) {
@@ -714,6 +827,7 @@ static void render(void) {
 int main(int argc, char **argv) {
     if (argc > 1) cli_path = argv[1];
     signal(SIGPIPE, SIG_IGN);
+    osk_init();
 
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
@@ -744,6 +858,7 @@ int main(int argc, char **argv) {
             switch (e.type) {
             case SDL_QUIT: quit = 1; break;
             case SDL_TEXTINPUT:
+                if (btn_char && e.text.text[0] == btn_char && e.text.text[1] == 0) { btn_char = 0; break; }
                 strncat(tbuf, e.text.text, sizeof tbuf - strlen(tbuf) - 1);
                 break;
             case SDL_MOUSEWHEEL: on_wheel(e.wheel.y); break;
@@ -764,6 +879,7 @@ int main(int argc, char **argv) {
         } else if (tbuf[0]) {
             text_seen = 1;
         }
+        btn_char = 0;
         pump();
         render();
         SDL_Delay(40);

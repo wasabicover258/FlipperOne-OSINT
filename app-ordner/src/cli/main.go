@@ -1,8 +1,8 @@
-// osint-cli: Backend von FlipperOne-OSINT.
-// Aufruf: osint-cli <typ> <wert>
-// Typen: username, email, phone, domain, ip, name
-// Ausgabe: eine Zeile pro Ergebnis, erstes Zeichen = Markierung:
-//   - gefunden   - nicht gefunden   ! Warnung/unklar   i Info   # Abschnittsueberschrift
+// osint-cli: backend of FlipperOne-OSINT.
+// Usage: osint-cli <type> <value>
+// Types: username, email, phone, domain, ip, name
+// Output: one line per result, first character = marker:
+//   - found   - not found   ! warning/unclear   i info   # section heading
 package main
 
 import (
@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-// Wird beim Bauen per -ldflags "-X main.Version=..." gesetzt.
+// Set at build time via -ldflags "-X main.Version=...".
 var Version = "dev"
 
 const userAgent = "Mozilla/5.0 (X11; Linux aarch64; rv:120.0) Gecko/20100101 Firefox/120.0"
@@ -29,7 +29,7 @@ var asciiRepl = strings.NewReplacer(
 	"–", "-", "—", "-", "’", "'", "“", "\"", "”", "\"", "…", "...",
 )
 
-// ascii macht Text darstellbar fuer die Oberflaeche (nur ASCII 32..126).
+// ascii makes text displayable in the UI (ASCII 32..126 only).
 func ascii(s string) string {
 	s = asciiRepl.Replace(s)
 	var b strings.Builder
@@ -69,7 +69,7 @@ var client = &http.Client{
 	},
 }
 
-// get holt eine URL (max. 512 KB Inhalt).
+// get fetches a URL (max. 512 KB of content).
 func get(c *http.Client, url string) (*http.Response, []byte, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -104,20 +104,20 @@ func main() {
 		return
 	}
 	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "Aufruf: osint-cli <username|email|phone|domain|ip|name> <wert>")
+		fmt.Fprintln(os.Stderr, "Usage: osint-cli <username|email|phone|domain|ip|name> <value>")
 		os.Exit(2)
 	}
 	typ := strings.ToLower(os.Args[1])
 	val := strings.TrimSpace(os.Args[2])
 	if val == "" || len(val) > 200 {
-		warn("EINGABE LEER ODER ZU LANG")
+		warn("Input empty or too long")
 		os.Exit(0)
 	}
 
-	// Sicherheitsnetz: nach 100 Sekunden beenden.
+	// Safety net: stop after 100 seconds.
 	go func() {
 		time.Sleep(100 * time.Second)
-		warn("ABBRUCH: ZEITLIMIT ERREICHT")
+		warn("Aborted: time limit reached")
 		os.Exit(0)
 	}()
 
@@ -135,11 +135,11 @@ func main() {
 	case "name":
 		runName(val)
 	default:
-		warn("UNBEKANNTER TYP: %s", typ)
+		warn("Unknown type: %s", typ)
 	}
 }
 
-// ipsOf loest einen Namen in IP-Adressen auf.
+// ipsOf resolves a name to IP addresses.
 func ipsOf(host string) []string {
 	ctx, cancel := dnsCtx(6)
 	defer cancel()

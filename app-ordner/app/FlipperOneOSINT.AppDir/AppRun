@@ -1,14 +1,14 @@
 #!/bin/sh
-# FlipperOne-OSINT: native Oberflaeche (SDL2) + Backend (osint-cli) aus demselben Bundle.
+# FlipperOne-OSINT: native UI (SDL2) + backend (osint-cli) from the same bundle.
 set -eu
 APPDIR=${APPDIR:-$(cd "$(dirname "$0")" && pwd)}
 export APPDIR
-# Ausserhalb des Panels: Bundle an flipctl uebergeben wie bei echten Flipper-Apps.
+# Outside the panel: hand the bundle to flipctl like a real Flipper app.
 if [ -z "${FLIPCTL_HOSTED:-}" ]; then
     exec flipctl open "${APPIMAGE:-$0}"
 fi
 
-# Startprotokoll (zur Fehlersuche): /tmp/flipperone-osint.log
+# Start log (for troubleshooting): /tmp/flipperone-osint.log
 LOG="${TMPDIR:-/tmp}/flipperone-osint.log"
 { [ -f "$LOG" ] && [ "$(wc -c < "$LOG")" -gt 100000 ] && : > "$LOG"; } 2>/dev/null || true
 {

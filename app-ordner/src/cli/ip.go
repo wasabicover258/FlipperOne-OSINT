@@ -8,29 +8,29 @@ import (
 
 func runIP(raw string) {
 	ip := net.ParseIP(strings.TrimSpace(raw))
-	head("IP-CHECK: %s", raw)
+	head("IP check: %s", raw)
 	if ip == nil {
-		warn("KEINE GUELTIGE IP-ADRESSE")
+		warn("Not a valid IP address")
 		return
 	}
 	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() {
-		info("PRIVATE/LOKALE ADRESSE: KEINE OEFFENTLICHEN DATEN")
+		info("Private/local address: no public data")
 		return
 	}
-	found("OEFFENTLICHE ADRESSE (%s)", map[bool]string{true: "IPV4", false: "IPV6"}[ip.To4() != nil])
+	found("Public address (%s)", map[bool]string{true: "IPv4", false: "IPv6"}[ip.To4() != nil])
 
 	ctx, cancel := dnsCtx(6)
 	names, err := net.DefaultResolver.LookupAddr(ctx, ip.String())
 	cancel()
 	if err == nil && len(names) > 0 {
-		found("RDNS: %s", strings.TrimSuffix(names[0], "."))
+		found("rDNS: %s", strings.TrimSuffix(names[0], "."))
 	} else {
-		miss("KEIN RDNS-EINTRAG")
+		miss("No rDNS record")
 	}
 
-	head("NETZ")
+	head("Network")
 	if resp, body, err := get(client, "https://ipinfo.io/"+ip.String()+"/json"); err != nil || resp.StatusCode != 200 {
-		warn("IPINFO NICHT ERREICHBAR")
+		warn("ipinfo not reachable")
 	} else {
 		var d struct {
 			Org      string `json:"org"`
@@ -39,25 +39,25 @@ func runIP(raw string) {
 		}
 		if json.Unmarshal(body, &d) == nil {
 			if d.Org != "" {
-				found("BETREIBER (ASN): %s", shorten(d.Org, 70))
+				found("Operator (ASN): %s", shorten(d.Org, 70))
 			}
 			if d.Country != "" {
-				found("LAND: %s", d.Country)
+				found("Country: %s", d.Country)
 			}
 			if d.Timezone != "" {
-				info("ZEITZONE: %s", d.Timezone)
+				info("Timezone: %s", d.Timezone)
 			}
 		}
 	}
 
-	head("OFFENE DIENSTE (SHODAN INTERNETDB)")
+	head("Open services (Shodan InternetDB)")
 	resp, body, err := get(client, "https://internetdb.shodan.io/"+ip.String())
 	if err != nil {
-		warn("INTERNETDB NICHT ERREICHBAR")
+		warn("InternetDB not reachable")
 		return
 	}
 	if resp.StatusCode == 404 {
-		miss("KEINE DATEN ZU DIESER ADRESSE")
+		miss("No data for this address")
 		return
 	}
 	var db struct {
@@ -67,7 +67,7 @@ func runIP(raw string) {
 		Vulns     []string `json:"vulns"`
 	}
 	if resp.StatusCode != 200 || json.Unmarshal(body, &db) != nil {
-		warn("INTERNETDB: HTTP %d", resp.StatusCode)
+		warn("InternetDB: HTTP %d", resp.StatusCode)
 		return
 	}
 	if len(db.Ports) > 0 {
@@ -75,22 +75,22 @@ func runIP(raw string) {
 		for _, p := range db.Ports {
 			ps = append(ps, itoa(p))
 		}
-		found("PORTS: %s", strings.Join(ps, ", "))
+		found("Ports: %s", strings.Join(ps, ", "))
 	} else {
-		miss("KEINE OFFENEN PORTS BEKANNT")
+		miss("No open ports known")
 	}
 	if len(db.Hostnames) > 0 {
-		info("HOSTNAMES: %s", shorten(strings.Join(db.Hostnames, ", "), 90))
+		info("Hostnames: %s", shorten(strings.Join(db.Hostnames, ", "), 90))
 	}
 	if len(db.Tags) > 0 {
-		info("TAGS: %s", strings.Join(db.Tags, ", "))
+		info("Tags: %s", strings.Join(db.Tags, ", "))
 	}
 	if len(db.Vulns) > 0 {
 		v := db.Vulns
 		if len(v) > 8 {
 			v = v[:8]
 		}
-		warn("BEKANNTE SCHWACHSTELLEN (%d): %s", len(db.Vulns), strings.Join(v, ", "))
+		warn("Known vulnerabilities (%d): %s", len(db.Vulns), strings.Join(v, ", "))
 	}
 }
 

@@ -1,9 +1,10 @@
-# FlipperOne-OSINT: Versionen (neueste oben)
+# FlipperOne-OSINT: versions (newest first)
 
-| Version | Datei | Änderung |
-|---------|-------|----------|
-| 0.2.1 | `DevBuilds/FlipperOne-OSINT-0.2.1-aarch64.AppImage` | Neues Design im Orange-Stil der Flipper-Apps (Tasten unten wie nmap), Flipper-Tasten (X, Menü, Haken) + Touch-Scrollen, Tasten-Test im Menü, Startprotokoll `/tmp/flipperone-osint.log`, Version im App-Namen |
-| 0.2.0 | `DevBuilds/FlipperOne-OSINT-0.2.0-aarch64.AppImage` | Neu: native Oberfläche (SDL2-Fenster) + Go-Backend. Module: Username (33 Plattformen), E-Mail, Telefon, Domain, IP, Name→Username-Varianten |
-| 0.1.2 | `DevBuilds/FlipperOne-OSINT-0.1.2-aarch64.AppImage` | App-Regal-Eintrag (`app.toml`, 14x14-Icon), Start wie echte Flipper-Apps (`flipctl`), Startlog in `/tmp/flipperone-osint.log` |
-| 0.1.1 | `DevBuilds/FlipperOne-OSINT-0.1.1-aarch64.AppImage` | Build für ARM64 (Flipper OS); neue Startoptionen `--port` und `--no-browser` |
-| 0.1.0 | `Public Releases/FlipperOne-OSINT-0.1.0-x86_64.AppImage` | Erstes Grundgerüst (x86_64) |
+| Version | File | Change |
+|---------|------|--------|
+| 0.2.2 | `DevBuilds/FlipperOne-OSINT-0.2.2-aarch64.AppImage` | On-screen touch keyboard; the Flipper buttons (keys Z X C V B) now control the app instead of typing letters; tab bar matches the five buttons; whole project switched to English |
+| 0.2.1 | `DevBuilds/FlipperOne-OSINT-0.2.1-aarch64.AppImage` | Orange Flipper-style design, key test screen, touch scrolling, start log `/tmp/flipperone-osint.log`, version in the app name |
+| 0.2.0 | `DevBuilds/FlipperOne-OSINT-0.2.0-aarch64.AppImage` | New: native SDL2 window + Go backend. Modules: username (33 platforms), email, phone, domain, IP, name -> username variants |
+| 0.1.2 | `DevBuilds/FlipperOne-OSINT-0.1.2-aarch64.AppImage` | App shelf entry (`app.toml`, 14x14 icon), start like real Flipper apps (`flipctl`), start log |
+| 0.1.1 | `DevBuilds/FlipperOne-OSINT-0.1.1-aarch64.AppImage` | ARM64 build (Flipper OS); new start options `--port` and `--no-browser` |
+| 0.1.0 | `Public Releases/FlipperOne-OSINT-0.1.0-x86_64.AppImage` | First skeleton (x86_64) |

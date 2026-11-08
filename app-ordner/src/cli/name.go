@@ -23,18 +23,18 @@ func cleanPart(s string) string {
 	return b.String()
 }
 
-// runName erzeugt typische Username-Varianten aus Vor- und Nachname (rein lokal).
+// runName generates typical username variants from first and last name (purely local).
 func runName(raw string) {
-	head("NAME -> USERNAME-VARIANTEN")
+	head("Name -> username variants")
 	parts := strings.Fields(raw)
 	if len(parts) < 2 {
-		warn("BITTE VOR- UND NACHNAME ANGEBEN")
+		warn("Please enter first and last name")
 		return
 	}
 	first := cleanPart(parts[0])
 	last := cleanPart(parts[len(parts)-1])
 	if first == "" || last == "" {
-		warn("NAME ENTHAELT KEINE VERWENDBAREN ZEICHEN")
+		warn("Name contains no usable characters")
 		return
 	}
 	f := first[:1]
@@ -60,7 +60,7 @@ func runName(raw string) {
 		list = append(list, k)
 	}
 	sort.Strings(list)
-	found("%d VARIANTEN ERZEUGT (OHNE ZAHLEN)", len(list))
+	found("%d variants generated (no numbers)", len(list))
 	line := ""
 	for _, v := range list {
 		if len(line)+len(v)+2 > 38 && line != "" {
@@ -75,8 +75,8 @@ func runName(raw string) {
 	if line != "" {
 		info("%s", line)
 	}
-	info("TIPP: EINE VARIANTE ALS USERNAME PRUEFEN")
-	info("KEINE PERSONENSUCHE, NUR TEXT-VARIANTEN")
+	info("Tip: check a variant with the Username module")
+	info("No people search, text variants only")
 }
 
 func min(a, b int) int {

@@ -1,6 +1,6 @@
 name: Build AppImage (DevBuilds)
-# Baut UI (C/SDL2) + Backend (Go) nativ auf ARM64 und packt eine AppImage nach DevBuilds.
-# Neue Version = Datei app-ordner/VERSION aendern (und pushen).
+# Builds UI (C/SDL2) + backend (Go) natively on ARM64 and packs an AppImage into DevBuilds.
+# New version = change the file app-ordner/VERSION (and push).
 
 on:
   push:
@@ -23,14 +23,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Version und Dateiname bestimmen
+      - name: Determine version and file name
         id: ver
         run: |
           VER=$(tr -d ' \r\n' < app-ordner/VERSION)
           OUT="$OUT_DIR/FlipperOne-OSINT-${VER}-${ARCH}.AppImage"
           echo "Version: $VER -> $OUT"
           if [ -e "$OUT" ]; then
-            echo "FEHLER: $OUT existiert schon. Bitte app-ordner/VERSION erhöhen." >&2
+            echo "ERROR: $OUT already exists. Please increase app-ordner/VERSION." >&2
             exit 1
           fi
           echo "version=$VER" >> "$GITHUB_OUTPUT"
@@ -40,7 +40,7 @@ jobs:
         with:
           go-version: '1.22'
 
-      - name: Backend bauen (Go, statisch)
+      - name: Build backend (Go, static)
         env:
           VER: ${{ steps.ver.outputs.version }}
         run: |
@@ -48,7 +48,7 @@ jobs:
           cd app-ordner/src/cli
           CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.Version=${VER}" -o "$GITHUB_WORKSPACE/$APPDIR/usr/bin/osint-cli" .
 
-      - name: Oberfläche bauen (C, SDL2)
+      - name: Build UI (C, SDL2)
         env:
           VER: ${{ steps.ver.outputs.version }}
         run: |
@@ -58,35 +58,35 @@ jobs:
             -o "$APPDIR/usr/bin/osint-ui" $(sdl2-config --cflags --libs)
           strip "$APPDIR/usr/bin/osint-ui"
 
-      - name: Binaries prüfen
+      - name: Check binaries
         run: |
           for f in osint-ui osint-cli; do
-            readelf -h "$APPDIR/usr/bin/$f" | grep -q AArch64 || { echo "FEHLER: $f nicht ARM64" >&2; exit 1; }
+            readelf -h "$APPDIR/usr/bin/$f" | grep -q AArch64 || { echo "ERROR: $f is not ARM64" >&2; exit 1; }
           done
-          echo "Benötigte Bibliotheken der UI:"
+          echo "Libraries needed by the UI:"
           readelf -d "$APPDIR/usr/bin/osint-ui" | grep NEEDED
           MAXG=$(objdump -T "$APPDIR/usr/bin/osint-ui" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n1)
-          echo "Höchste GLIBC-Version: $MAXG"
-          [ "$(printf '%s\nGLIBC_2.34\n' "$MAXG" | sort -V | tail -n1)" = "GLIBC_2.34" ] || { echo "FEHLER: GLIBC > 2.34" >&2; exit 1; }
+          echo "Highest GLIBC version: $MAXG"
+          [ "$(printf '%s\nGLIBC_2.34\n' "$MAXG" | sort -V | tail -n1)" = "GLIBC_2.34" ] || { echo "ERROR: GLIBC > 2.34" >&2; exit 1; }
           "$APPDIR/usr/bin/osint-cli" version
           "$APPDIR/usr/bin/osint-cli" phone "0171 1234567"
 
-      - name: appimagetool holen
+      - name: Fetch appimagetool
         run: |
           curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-aarch64.AppImage
           chmod +x appimagetool
 
-      - name: AppImage bauen
+      - name: Build AppImage
         env:
           OUT: ${{ steps.ver.outputs.out }}
         run: |
           chmod +x "$APPDIR/AppRun" "$APPDIR/usr/bin/"*
           mkdir -p "$OUT_DIR"
           ARCH=aarch64 ./appimagetool --appimage-extract-and-run --no-appstream "$APPDIR" "$OUT"
-          readelf -h "$OUT" | grep -q 'AArch64' || { echo "FEHLER: Datei ist nicht ARM64" >&2; exit 1; }
+          readelf -h "$OUT" | grep -q 'AArch64' || { echo "ERROR: file is not ARM64" >&2; exit 1; }
           ls -l "$OUT"
 
-      - name: Commit nach DevBuilds
+      - name: Commit to DevBuilds
         env:
           VER: ${{ steps.ver.outputs.version }}
           OUT: ${{ steps.ver.outputs.out }}

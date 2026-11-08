@@ -8,12 +8,12 @@ import (
 	"sync"
 )
 
-// Pruefarten:
+// Check modes:
 //
-//	status      200 = gefunden, 404/410 (und ggf. arg als Code) = nicht gefunden
-//	notbody     200 und Inhalt != arg = gefunden
-//	notcontains 200 und Inhalt enthaelt arg NICHT = gefunden
-//	contains    200 und Inhalt enthaelt arg = gefunden
+//	status      200 = found, 404/410 (and optionally arg as code) = not found
+//	notbody     200 and body != arg = found
+//	notcontains 200 and body does NOT contain arg = found
+//	contains    200 and body contains arg = found
 type site struct {
 	name, url, mode, arg string
 }
@@ -74,7 +74,7 @@ func checkSite(s site, user string) siteResult {
 	r := siteResult{s: s, url: profileURL(s, user), state: stUnknown}
 	resp, body, err := get(client, url)
 	if err != nil {
-		r.note = "KEINE ANTWORT"
+		r.note = "no response"
 		return r
 	}
 	code := resp.StatusCode
@@ -120,7 +120,7 @@ func checkSite(s site, user string) siteResult {
 	return r
 }
 
-// profileURL liefert die fuer Menschen lesbare Profil-Adresse (statt der API-Adresse).
+// profileURL returns the human-readable profile URL (instead of the API URL).
 func profileURL(s site, user string) string {
 	switch s.name {
 	case "GitLab":
@@ -153,12 +153,12 @@ func profileURL(s site, user string) string {
 
 func runUsername(u string) {
 	if !validUser.MatchString(u) {
-		warn("UNGUELTIGER USERNAME (2-40 ZEICHEN: A-Z 0-9 . _ -)")
+		warn("Invalid username (2-40 characters: a-z 0-9 . _ -)")
 		return
 	}
-	head("USERNAME-CHECK: %s", u)
-	info("PRUEFE %d OEFFENTLICHE PLATTFORMEN ...", len(sites))
-	info("TREFFER = NAME IST DORT VERGEBEN, NICHT UNBEDINGT DIESELBE PERSON")
+	head("Username check: %s", u)
+	info("Checking %d public platforms ...", len(sites))
+	info("Hit = name is taken there, not necessarily the same person")
 
 	results := make(chan siteResult, len(sites))
 	sem := make(chan struct{}, 8)
@@ -193,12 +193,12 @@ func runUsername(u string) {
 	sort.Strings(missing)
 	sort.Strings(unknown)
 
-	head("ERGEBNIS")
-	info("TREFFER: %d VON %d", hits, len(sites))
+	head("Result")
+	info("Hits: %d of %d", hits, len(sites))
 	if len(missing) > 0 {
-		miss("NICHT VERGEBEN (%d): %s", len(missing), strings.Join(missing, ", "))
+		miss("Not taken (%d): %s", len(missing), strings.Join(missing, ", "))
 	}
 	if len(unknown) > 0 {
-		warn("UNKLAR (%d): %s", len(unknown), strings.Join(unknown, ", "))
+		warn("Unclear (%d): %s", len(unknown), strings.Join(unknown, ", "))
 	}
 }

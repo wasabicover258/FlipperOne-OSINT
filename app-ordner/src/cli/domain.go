@@ -32,19 +32,19 @@ func normalizeDomain(s string) string {
 
 func runDomain(raw string) {
 	d := normalizeDomain(raw)
-	head("DOMAIN-CHECK: %s", d)
+	head("Domain check: %s", d)
 	if !domainRe.MatchString(d) {
-		warn("UNGUELTIGE DOMAIN (BEISPIEL: BEISPIEL.DE)")
+		warn("Invalid domain (example: example.com)")
 		return
 	}
 	dnsRecords(d)
-	head("REGISTRIERUNG (RDAP)")
+	head("Registration (RDAP)")
 	rdapSummary(d)
-	head("WEBSERVER")
+	head("Web server")
 	httpCheck(d)
-	head("TLS-ZERTIFIKAT")
+	head("TLS certificate")
 	tlsCheck(d)
-	head("SUBDOMAINS (ZERTIFIKATS-LOGS)")
+	head("Subdomains (certificate logs)")
 	subdomains(d)
 }
 
@@ -56,7 +56,7 @@ func dnsRecords(d string) {
 	addrs, err := r.LookupIPAddr(ctx, d)
 	cancel()
 	if err != nil || len(addrs) == 0 {
-		warn("DOMAIN LOEST NICHT AUF (%s)", shorten(fmt.Sprint(err), 50))
+		warn("Domain does not resolve (%s)", shorten(fmt.Sprint(err), 50))
 	}
 	var v4 []string
 	for _, a := range addrs {
@@ -75,7 +75,7 @@ func dnsRecords(d string) {
 		names, err := r.LookupAddr(ctx, ip)
 		cancel()
 		if err == nil && len(names) > 0 {
-			info("RDNS %s: %s", ip, strings.TrimSuffix(names[0], "."))
+			info("rDNS %s: %s", ip, strings.TrimSuffix(names[0], "."))
 		}
 	}
 
@@ -122,9 +122,9 @@ func dnsRecords(d string) {
 		}
 	}
 	if spf {
-		info("SPF VORHANDEN")
+		info("SPF present")
 	} else {
-		miss("SPF FEHLT")
+		miss("SPF missing")
 	}
 	ctx, cancel = dnsCtx(5)
 	dm, _ := r.LookupTXT(ctx, "_dmarc."+d)
@@ -137,19 +137,19 @@ func dnsRecords(d string) {
 		}
 	}
 	if !hasDmarc {
-		miss("DMARC FEHLT")
+		miss("DMARC missing")
 	}
 }
 
-// rdapSummary zeigt Registrar und Fristen. Personenbezogene Daten werden nicht ausgegeben.
+// rdapSummary shows registrar and dates. Personal data is not printed.
 func rdapSummary(d string) {
 	resp, body, err := get(client, "https://rdap.org/domain/"+d)
 	if err != nil {
-		warn("RDAP NICHT ERREICHBAR")
+		warn("RDAP not reachable")
 		return
 	}
 	if resp.StatusCode == 404 {
-		miss("KEIN RDAP-EINTRAG (TLD UNTERSTUETZT RDAP NICHT ODER FREI)")
+		miss("No RDAP record (TLD without RDAP, or domain free)")
 		return
 	}
 	if resp.StatusCode != 200 {
@@ -171,7 +171,7 @@ func rdapSummary(d string) {
 		} `json:"nameservers"`
 	}
 	if err := json.Unmarshal(body, &rd); err != nil {
-		warn("RDAP-ANTWORT NICHT LESBAR")
+		warn("RDAP response not readable")
 		return
 	}
 	for _, e := range rd.Entities {
@@ -189,19 +189,19 @@ func rdapSummary(d string) {
 			arr, _ := p.([]any)
 			if len(arr) >= 4 && arr[0] == "fn" {
 				if name, ok := arr[3].(string); ok {
-					found("REGISTRAR: %s", name)
+					found("Registrar: %s", name)
 				}
 			}
 		}
 	}
-	labels := map[string]string{"registration": "REGISTRIERT", "expiration": "LAEUFT AB", "last changed": "GEAENDERT"}
+	labels := map[string]string{"registration": "Registered", "expiration": "Expires", "last changed": "Changed"}
 	for _, ev := range rd.Events {
 		if l, ok := labels[ev.Action]; ok && len(ev.Date) >= 10 {
 			found("%s: %s", l, ev.Date[:10])
 		}
 	}
 	if len(rd.Status) > 0 {
-		info("STATUS: %s", shorten(strings.Join(rd.Status, ", "), 90))
+		info("Status: %s", shorten(strings.Join(rd.Status, ", "), 90))
 	}
 }
 
@@ -217,26 +217,26 @@ func httpCheck(d string) {
 	base := "https://" + d
 	resp, body, err = get(client, base+"/")
 	if err != nil {
-		warn("HTTPS NICHT ERREICHBAR: %s", shorten(err.Error(), 50))
+		warn("HTTPS not reachable: %s", shorten(err.Error(), 50))
 		base = "http://" + d
 		resp, body, err = get(client, base+"/")
 		if err != nil {
-			warn("HTTP NICHT ERREICHBAR")
+			warn("HTTP not reachable")
 			return
 		}
 	}
-	found("STATUS: %d  %s", resp.StatusCode, shorten(resp.Request.URL.String(), 60))
+	found("Status: %d  %s", resp.StatusCode, shorten(resp.Request.URL.String(), 60))
 	if s := resp.Header.Get("Server"); s != "" {
-		info("SERVER: %s", shorten(s, 60))
+		info("Server: %s", shorten(s, 60))
 	}
 	if s := resp.Header.Get("X-Powered-By"); s != "" {
-		info("POWERED-BY: %s", shorten(s, 60))
+		info("Powered-By: %s", shorten(s, 60))
 	}
 	if m := titleRe.FindSubmatch(body); m != nil {
-		info("TITEL: %s", shorten(string(m[1]), 70))
+		info("Title: %s", shorten(string(m[1]), 70))
 	}
 	if m := genRe.FindSubmatch(body); m != nil {
-		info("GENERATOR: %s", shorten(string(m[1]), 60))
+		info("Generator: %s", shorten(string(m[1]), 60))
 	}
 	checks := []struct{ h, label string }{
 		{"Strict-Transport-Security", "HSTS"},
@@ -255,10 +255,10 @@ func httpCheck(d string) {
 		}
 	}
 	if len(have) > 0 {
-		found("SICHERHEITS-HEADER: %s", strings.Join(have, ", "))
+		found("Security headers: %s", strings.Join(have, ", "))
 	}
 	if len(lack) > 0 {
-		miss("HEADER FEHLEN: %s", strings.Join(lack, ", "))
+		miss("Headers missing: %s", strings.Join(lack, ", "))
 	}
 	for _, p := range []string{"/robots.txt", "/.well-known/security.txt"} {
 		r2, b2, err := get(client, base+p)
@@ -267,9 +267,9 @@ func httpCheck(d string) {
 		}
 		t := strings.TrimSpace(string(b2))
 		if r2.StatusCode == 200 && t != "" && !strings.HasPrefix(strings.ToLower(t), "<") {
-			found("%s VORHANDEN", strings.ToUpper(p))
+			found("%s present", p)
 		} else {
-			miss("%s FEHLT", strings.ToUpper(p))
+			miss("%s missing", p)
 		}
 	}
 }
@@ -282,7 +282,7 @@ func tlsCheck(d string) {
 		verified = false
 		conn, err = tls.DialWithDialer(dialer, "tcp", d+":443", &tls.Config{ServerName: d, InsecureSkipVerify: true})
 		if err != nil {
-			warn("KEIN TLS AUF PORT 443")
+			warn("No TLS on port 443")
 			return
 		}
 	}
@@ -290,31 +290,31 @@ func tlsCheck(d string) {
 	st := conn.ConnectionState()
 	vers := map[uint16]string{tls.VersionTLS10: "TLS 1.0", tls.VersionTLS11: "TLS 1.1", tls.VersionTLS12: "TLS 1.2", tls.VersionTLS13: "TLS 1.3"}
 	if verified {
-		found("ZERTIFIKAT GUELTIG UND VERTRAUENSWUERDIG")
+		found("Certificate valid and trusted")
 	} else {
-		warn("ZERTIFIKAT NICHT VERTRAUENSWUERDIG")
+		warn("Certificate not trusted")
 	}
-	info("PROTOKOLL: %s  %s", vers[st.Version], tls.CipherSuiteName(st.CipherSuite))
+	info("Protocol: %s  %s", vers[st.Version], tls.CipherSuiteName(st.CipherSuite))
 	if len(st.PeerCertificates) == 0 {
 		return
 	}
 	c := st.PeerCertificates[0]
-	info("AUSSTELLER: %s", shorten(c.Issuer.CommonName+" "+strings.Join(c.Issuer.Organization, " "), 70))
-	info("GUELTIG: %s BIS %s", c.NotBefore.Format("2006-01-02"), c.NotAfter.Format("2006-01-02"))
+	info("Issuer: %s", shorten(c.Issuer.CommonName+" "+strings.Join(c.Issuer.Organization, " "), 70))
+	info("Valid: %s to %s", c.NotBefore.Format("2006-01-02"), c.NotAfter.Format("2006-01-02"))
 	left := int(time.Until(c.NotAfter).Hours() / 24)
 	if left < 0 {
-		warn("ZERTIFIKAT ABGELAUFEN (VOR %d TAGEN)", -left)
+		warn("Certificate expired (%d days ago)", -left)
 	} else if left < 21 {
-		warn("LAEUFT IN %d TAGEN AB", left)
+		warn("Expires in %d days", left)
 	} else {
-		found("NOCH %d TAGE GUELTIG", left)
+		found("Still valid for %d days", left)
 	}
 	names := c.DNSNames
 	if len(names) > 0 {
 		if len(names) > 8 {
 			names = names[:8]
 		}
-		info("NAMEN: %s", strings.Join(names, ", "))
+		info("Names: %s", strings.Join(names, ", "))
 	}
 }
 
@@ -322,14 +322,14 @@ func subdomains(d string) {
 	crt := &http.Client{Timeout: 25 * time.Second}
 	resp, body, err := get(crt, "https://crt.sh/?q=%25."+d+"&output=json")
 	if err != nil || resp.StatusCode != 200 {
-		warn("CRT.SH NICHT ERREICHBAR")
+		warn("crt.sh not reachable")
 		return
 	}
 	var rows []struct {
 		Name string `json:"name_value"`
 	}
 	if err := json.Unmarshal(body, &rows); err != nil {
-		warn("CRT.SH-ANTWORT NICHT LESBAR (EVTL. ZU GROSS)")
+		warn("crt.sh response not readable (maybe too large)")
 		return
 	}
 	set := map[string]bool{}
@@ -343,7 +343,7 @@ func subdomains(d string) {
 	}
 	delete(set, d)
 	if len(set) == 0 {
-		miss("KEINE SUBDOMAINS IN ZERTIFIKATS-LOGS")
+		miss("No subdomains in certificate logs")
 		return
 	}
 	names := make([]string, 0, len(set))
@@ -351,7 +351,7 @@ func subdomains(d string) {
 		names = append(names, n)
 	}
 	sort.Strings(names)
-	info("%d SUBDOMAINS IN LOGS", len(names))
+	info("%d subdomains in logs", len(names))
 	limit := 60
 	if len(names) < limit {
 		limit = len(names)
@@ -383,8 +383,8 @@ func subdomains(d string) {
 			}
 		}
 	}
-	info("%d VON %d GEPRUEFTEN LOESEN AUF", live, limit)
+	info("%d of %d checked resolve", live, limit)
 	if len(names) > limit {
-		info("%d WEITERE NICHT GEPRUEFT", len(names)-limit)
+		info("%d more not checked", len(names)-limit)
 	}
 }
