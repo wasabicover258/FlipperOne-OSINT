@@ -1,0 +1,54 @@
+name: Build AppImage
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version auslesen
+        id: ver
+        run: |
+          VER=$(grep -m1 '^VERSION' app/FlipperOneOSINT.AppDir/usr/share/osint/app.py | cut -d'"' -f2)
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+
+      - name: appimagetool holen
+        run: |
+          curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+
+      - name: AppImage bauen
+        env:
+          VER: ${{ steps.ver.outputs.version }}
+        run: |
+          chmod +x app/FlipperOneOSINT.AppDir/AppRun
+          mkdir -p "Public Releases"
+          ARCH=x86_64 ./appimagetool --appimage-extract-and-run --no-appstream \
+            app/FlipperOneOSINT.AppDir "Public Releases/FlipperOne-OSINT-${VER}-x86_64.AppImage"
+
+      - name: Commit
+        env:
+          VER: ${{ steps.ver.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "Public Releases"
+          if git diff --cached --quiet; then echo "Nichts Neues."; exit 0; fi
+          git commit -m "Build AppImage ${VER}"
+          git push origin main
+
+      - name: Sync in AppCatalogue anstossen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run sync-appcatalogue.yml --ref main
