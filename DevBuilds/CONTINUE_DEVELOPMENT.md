@@ -9,7 +9,7 @@ Stand: 2026-11-08, Sicherung wegen des erreichten Nutzungslimits. **Das ist ein 
 | Repo | `wasabicover258/FlipperOne-OSINT` |
 | Branch | `dev/personintel-wip` (neu angelegt; `main` und alle vorhandenen Dateien/AppImages sind unverändert) |
 | Basis auf `main` | `4f938ade2339da5d0403b17d5fa9ab3752bbd95d` ("DevBuild AppImage 1.3.0 (aarch64)") |
-| Commit-SHA des Code-Snapshots | siehe `git log dev/personintel-wip` (der oberste Commit "PersonIntel WIP: …"); die genaue SHA steht in der Abschlussmeldung des Sicherungslaufs |
+| Commit-SHA des Code-Snapshots | `e5695f3` ("PersonIntel WIP: Kern, zehn Adapter, Graph, Berichte, Austausch, Tests"); darauf folgt ein zweiter Commit, der nur diese Datei um die SHA ergänzt |
 | Projektordner | `PersonIntel/` (eigenständig; berührt `app-ordner/`, `DevBuilds/*.AppImage`, `Public Releases/` nicht) |
 
 Hinweis: PersonIntel ist ein **eigenes Projekt** (Python/PySide6, Linux-Desktop, Personenrecherche mit Zweckprüfung). Es liegt nur deshalb in diesem Repo, weil hier `DevBuilds/` existiert und dies das einzige angebundene Repo war. Die README von FlipperOne-OSINT schließt personenbezogene Dienste (Pipl, Spokeo, ShadowDragon, Babel Street, Mr.Holmes) für die Flipper-App bewusst aus – falls PersonIntel ein eigenes Repo bekommen soll, `PersonIntel/` einfach dorthin verschieben (`git subtree split` oder Kopie).
