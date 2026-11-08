@@ -140,6 +140,8 @@ static int screen = S_MENU;
 static int sel = 0;
 static int mode_idx = 0;
 static char inputs[NMODES][MAXIN + 1];
+static int cur[NMODES];   /* text cursor position per mode */
+static int view_off = 0;  /* first visible character of the input field */
 static int quit = 0;
 static int text_seen = 0;
 
@@ -446,6 +448,7 @@ static void start_run(void) {
     char *in = inputs[mode_idx];
     size_t l = strlen(in);
     while (l > 0 && in[l - 1] == ' ') in[--l] = 0;
+    if (cur[mode_idx] > (int)l) cur[mode_idx] = (int)l;
     if (l == 0) return;
     stop_child();
     nlines = 0;
@@ -477,12 +480,42 @@ static void activate(int idx) {
     }
 }
 
-static void append_input(const char *s) {
+/* ---------- text field editing (insert / delete at the cursor) ---------- */
+static void in_insert(char c) {
     char *in = inputs[mode_idx];
-    size_t l = strlen(in);
-    for (; *s && l < MAXIN; s++)
-        if ((unsigned char)*s >= 32 && (unsigned char)*s <= 126) in[l++] = *s;
-    in[l] = 0;
+    int l = (int)strlen(in), p = cur[mode_idx];
+    if (l >= MAXIN) return;
+    if (p > l) p = l;
+    if (p < 0) p = 0;
+    memmove(in + p + 1, in + p, (size_t)(l - p + 1));
+    in[p] = c;
+    cur[mode_idx] = p + 1;
+}
+
+static void in_delete(void) { /* delete the character before the cursor */
+    char *in = inputs[mode_idx];
+    int l = (int)strlen(in), p = cur[mode_idx];
+    if (p > l) p = l;
+    if (p <= 0) return;
+    memmove(in + p - 1, in + p, (size_t)(l - p + 1));
+    cur[mode_idx] = p - 1;
+}
+
+static void in_clear(void) {
+    inputs[mode_idx][0] = 0;
+    cur[mode_idx] = 0;
+    view_off = 0;
+}
+
+static void in_move(int d) {
+    int l = (int)strlen(inputs[mode_idx]);
+    int p = cur[mode_idx] + d;
+    cur[mode_idx] = p < 0 ? 0 : (p > l ? l : p);
+}
+
+static void append_input(const char *s) {
+    for (; *s; s++)
+        if ((unsigned char)*s >= 32 && (unsigned char)*s <= 126) in_insert(*s);
 }
 
 static char key_char(SDL_Keycode s, Uint16 mod) {
@@ -516,6 +549,8 @@ static void go_back_from_run(void) {
 static void softkey(int n);
 static void osk_move(int dr, int dc);
 static void osk_enter(void);
+static void act_back(void);
+static void act_x(void);
 
 static void on_key(const SDL_KeyboardEvent *k, char *kbuf) {
     SDL_Keycode s = k->keysym.sym;
@@ -539,8 +574,8 @@ static void on_key(const SDL_KeyboardEvent *k, char *kbuf) {
         if (s == 'b') { btn_char = 'b'; softkey(4); return; }
     }
     /* other back/menu/ok key codes */
-    if (s == SDLK_AC_BACK || s == SDLK_CANCEL || s == SDLK_BACKSPACE) { softkey(3); return; }
-    if (s == SDLK_MENU || s == SDLK_APPLICATION) { softkey(1); return; }
+    if (s == SDLK_AC_BACK || s == SDLK_CANCEL || s == SDLK_BACKSPACE) { act_back(); return; }
+    if (s == SDLK_MENU || s == SDLK_APPLICATION) { act_x(); return; }
     if (s == SDLK_SELECT || s == SDLK_EXECUTE) { softkey(4); return; }
     if (s == SDLK_F1) { softkey(0); return; }
     if (s == SDLK_F2) { softkey(1); return; }
@@ -605,15 +640,13 @@ static Key *osk_hit(int x, int y, int *row) {
 }
 
 static void osk_press(const Key *k) {
-    char *in = inputs[mode_idx];
-    size_t l = strlen(in);
     switch (k->kind) {
-    case K_BKSP: if (l > 0) in[l - 1] = 0; break;
+    case K_BKSP: in_delete(); break;
     case K_SHIFT: shift_on = !shift_on; break;
     default: {
         char c = k->ch;
         if (shift_on && c >= 'a' && c <= 'z') c = (char)(c - 32);
-        if (l < MAXIN) { in[l] = c; in[l + 1] = 0; }
+        in_insert(c);
         shift_on = 0;
     }
     }
@@ -646,36 +679,48 @@ static void osk_enter(void) {
 #define MENU_Y0 13
 #define MENU_P 10
 
-/* Button semantics (the five buttons below the screen):
- *   Z  (X icon)   = close the app
- *   X  (menu)     = second function: help / clear / top
- *   V or Backspace = one step back (in the text field: delete a character)
- *   B  (check)    = OK: open / start / run again
+/* Button semantics (the five buttons below the screen + Backspace key):
+ *   Z  = text field: cursor left   | elsewhere: close the app
+ *   X  = text field: cursor right  | menu: help, results: jump to top
+ *   V  = text field: clear         | elsewhere: one step back
+ *   B  = OK: open / start / run again
+ *   Backspace = text field: delete before cursor | elsewhere: one step back
  */
 static void act_exit(void) { quit = 1; }
 
+/* Backspace key / back: delete in the text field, otherwise one step back. */
 static void act_back(void) {
     switch (screen) {
     case S_MENU: quit = 1; break;
-    case S_INPUT: {
-        char *in = inputs[mode_idx];
-        size_t l = strlen(in);
-        if (l > 0) in[l - 1] = 0;
-        else screen = S_MENU;
+    case S_INPUT:
+        if (inputs[mode_idx][0] == 0) screen = S_MENU;
+        else in_delete();
         break;
-    }
     case S_RUN: go_back_from_run(); break;
     default: screen = S_MENU; break;
     }
 }
 
-static void act_menu(void) {
+/* Z button */
+static void act_z(void) {
+    if (screen == S_INPUT) in_move(-1);
+    else act_exit();
+}
+
+/* X button */
+static void act_x(void) {
     switch (screen) {
     case S_MENU: screen = S_HELP; break;
-    case S_INPUT: inputs[mode_idx][0] = 0; break;
+    case S_INPUT: in_move(1); break;
     case S_RUN: scroll_by(-MAXLINES); break;
     default: screen = S_MENU; break;
     }
+}
+
+/* V button */
+static void act_v(void) {
+    if (screen == S_INPUT) in_clear();
+    else act_back();
 }
 
 static void act_ok(void) {
@@ -690,9 +735,9 @@ static void act_ok(void) {
 
 /* n = button slot: 0 = Z, 1 = X, 3 = V, 4 = B */
 static void softkey(int n) {
-    if (n == 0) act_exit();
-    else if (n == 1) act_menu();
-    else if (n == 3) act_back();
+    if (n == 0) act_z();
+    else if (n == 1) act_x();
+    else if (n == 3) act_v();
     else if (n == 4) act_ok();
 }
 
@@ -790,19 +835,16 @@ static void draw_input(void) {
     rbox(4, 10, W - 8, 14, C_INK, C_DARK);
     const char *in = inputs[mode_idx];
     int l = (int)strlen(in);
-    if (l == 0) {
-        text_px(10, 14, m->example, C_SOFT);
-        if ((SDL_GetTicks() / 500) % 2 == 0) put_char(10, 14, '_', C_INK);
-    } else {
-        int vis = (W - 24) / CW;
-        const char *shown = l > vis ? in + (l - vis) : in;
-        text_px(10, 14, shown, C_INK);
-        int cx = 10 + (int)strlen(shown) * CW;
-        if ((SDL_GetTicks() / 500) % 2 == 0 && cx < W - 8) put_char(cx, 14, '_', C_INK);
-    }
-    text_px(4, 26, "Own data or with consent only.", C_SOFT);
+    int vis = (W - 24) / CW;
+    int c = cur[mode_idx] > l ? l : cur[mode_idx];
+    if (c < view_off) view_off = c;
+    if (c > view_off + vis - 1) view_off = c - (vis - 1);
+    if (view_off < 0) view_off = 0;
+    if (l == 0) text_px(10, 14, m->example, C_SOFT);
+    else text_px(10, 14, in + view_off, C_INK);
+    if ((SDL_GetTicks() / 500) % 2 == 0) rect(10 + (c - view_off) * CW - 1, 12, 1, 10, C_INK);
     draw_osk();
-    softkeys("EXIT", "CLEAR", "DEL", "START");
+    softkeys("<", ">", "CLEAR", "START");
 }
 
 static void draw_run(void) {
@@ -838,18 +880,16 @@ static void draw_help(void) {
         "All-in-one tool for public information:",
         "username, email, phone, domain, IP.",
         "",
-        "Buttons = tabs above them: X exit, Menu,",
-        "Backspace = back, Check = OK. Arrows move",
-        "the keyboard focus, Enter presses a key.",
-        "Touch / mouse works too (swipe to scroll).",
+        "Z / X move the cursor in the text field,",
+        "V clears it, Backspace deletes, B = OK.",
+        "Arrows move the keyboard focus, Enter",
+        "presses a key. Touch / mouse works too.",
         "",
-        "IMPORTANT: only for your own data or",
-        "with the consent of the people involved.",
         "No people search, no owner lookup.",
     };
     static const Color red = {150, 18, 0};
     for (size_t i = 0; i < sizeof h / sizeof h[0]; i++)
-        text_px(4, 14 + (int)i * 10, h[i], i >= 8 ? red : C_INK);
+        text_px(4, 14 + (int)i * 10, h[i], i >= 9 ? red : C_INK);
     softkeys("EXIT", NULL, "BACK", NULL);
 }
 

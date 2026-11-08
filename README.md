@@ -4,7 +4,6 @@ An all-in-one OSINT application for the Flipper One OS (AppImage, ARM64).
 Pick what you have (username, email, phone number, domain, IP address, name) and the
 app gathers publicly available information about it.
 
-**Use it only for your own data or with the consent of the people involved.**
 There is no people search and no phone-owner lookup by design.
 
 ## Modules
