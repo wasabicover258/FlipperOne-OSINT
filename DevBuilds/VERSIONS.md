@@ -2,6 +2,7 @@
 
 | Version | File | Change |
 |---------|------|--------|
+| 0.2.5 | `DevBuilds/FlipperOne-OSINT-0.2.5-aarch64.AppImage` | Cleaner flat UI; keyboard is lowercase by default with a Shift toggle; Name/Help/Key test removed; results tabs Refresh + Again; Backspace only steps back and never closes the app |
 | 0.2.4 | `DevBuilds/FlipperOne-OSINT-0.2.4-aarch64.AppImage` | Text cursor: Z/X move left/right inside the typed text, V clears, Backspace deletes at the cursor; consent notices removed |
 | 0.2.3 | `DevBuilds/FlipperOne-OSINT-0.2.3-aarch64.AppImage` | Keyboard focus with arrow keys + Enter (like the browser keyboard); Z button closes the app, Backspace/V goes one step back; exact Flipper One orange |
 | 0.2.2 | `DevBuilds/FlipperOne-OSINT-0.2.2-aarch64.AppImage` | On-screen touch keyboard; the Flipper buttons (keys Z X C V B) now control the app instead of typing letters; tab bar matches the five buttons; whole project switched to English |

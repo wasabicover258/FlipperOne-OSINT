@@ -1,6 +1,6 @@
 // osint-cli: backend of FlipperOne-OSINT.
 // Usage: osint-cli <type> <value>
-// Types: username, email, phone, domain, ip, name
+// Types: username, email, phone, domain, ip
 // Output: one line per result, first character = marker:
 //   - found   - not found   ! warning/unclear   i info   # section heading
 package main
@@ -104,7 +104,7 @@ func main() {
 		return
 	}
 	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "Usage: osint-cli <username|email|phone|domain|ip|name> <value>")
+		fmt.Fprintln(os.Stderr, "Usage: osint-cli <username|email|phone|domain|ip> <value>")
 		os.Exit(2)
 	}
 	typ := strings.ToLower(os.Args[1])
@@ -132,8 +132,6 @@ func main() {
 		runDomain(val)
 	case "ip":
 		runIP(val)
-	case "name":
-		runName(val)
 	default:
 		warn("Unknown type: %s", typ)
 	}

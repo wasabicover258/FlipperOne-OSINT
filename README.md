@@ -15,7 +15,6 @@ There is no people search and no phone-owner lookup by design.
 | Phone | Country, E.164/international format, plausible length, line type (offline) |
 | Domain | DNS records, RDAP registration, web server and security headers, TLS certificate, subdomains (crt.sh) |
 | IP | rDNS, operator/country (ipinfo.io), open ports and known CVEs (Shodan InternetDB) |
-| Name | Generates username variants (text only) |
 
 ## Layout
 
