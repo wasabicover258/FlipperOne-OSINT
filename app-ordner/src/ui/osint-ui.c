@@ -32,10 +32,10 @@
 
 typedef struct { Uint8 r, g, b; } Color;
 /* Orange-Stil wie die Flipper-Apps (z.B. nmap) */
-static const Color C_BG = {255, 136, 0};     /* background (Flipper One orange) */
+static const Color C_BG = {255, 130, 0};     /* background (Flipper One orange, #FF8200) */
 static const Color C_INK = {34, 17, 0};      /* text / outlines */
-static const Color C_PANEL = {255, 156, 30}; /* menu rows / keys */
-static const Color C_DARK = {200, 100, 0};   /* input field / section bars */
+static const Color C_PANEL = {255, 150, 24}; /* menu rows / keys */
+static const Color C_DARK = {204, 104, 0};   /* input field / section bars */
 static const Color C_SOFT = {125, 60, 0};    /* secondary text */
 static const Color C_LIGHT = {255, 176, 80}; /* text on black */
 
@@ -159,6 +159,7 @@ static char keylog[NKEYLOG][44];
 static int keylog_n = 0, esc_streak = 0;
 static int drag_active = 0, drag_last_y = 0, drag_acc = 0;
 static char btn_char = 0;          /* last Flipper button seen as a letter key (to drop its text event) */
+static int kb_r = 1, kb_c = 0;    /* focused on-screen key (arrow-key navigation) */
 static int shift_on = 0;           /* on-screen keyboard: next letter is upper case */
 static int flash_row = -1, flash_col = -1;
 static Uint32 flash_until = 0;
@@ -513,6 +514,8 @@ static void go_back_from_run(void) {
 }
 
 static void softkey(int n);
+static void osk_move(int dr, int dc);
+static void osk_enter(void);
 
 static void on_key(const SDL_KeyboardEvent *k, char *kbuf) {
     SDL_Keycode s = k->keysym.sym;
@@ -527,8 +530,7 @@ static void on_key(const SDL_KeyboardEvent *k, char *kbuf) {
         }
         return;
     }
-    /* The five Flipper buttons arrive as the keys Z X C V B (left to right):
-     * Z = back, X = menu, C = power (ignored), V = view/page, B = OK. */
+    /* The five Flipper buttons arrive as the keys Z X C V B (left to right). */
     if (!(mod & (KMOD_CTRL | KMOD_ALT | KMOD_GUI | KMOD_SHIFT))) {
         if (s == 'z') { btn_char = 'z'; softkey(0); return; }
         if (s == 'x') { btn_char = 'x'; softkey(1); return; }
@@ -537,10 +539,9 @@ static void on_key(const SDL_KeyboardEvent *k, char *kbuf) {
         if (s == 'b') { btn_char = 'b'; softkey(4); return; }
     }
     /* other back/menu/ok key codes */
-    if (s == SDLK_AC_BACK || s == SDLK_CANCEL) { softkey(0); return; }
+    if (s == SDLK_AC_BACK || s == SDLK_CANCEL || s == SDLK_BACKSPACE) { softkey(3); return; }
     if (s == SDLK_MENU || s == SDLK_APPLICATION) { softkey(1); return; }
     if (s == SDLK_SELECT || s == SDLK_EXECUTE) { softkey(4); return; }
-    if (screen == S_RUN && (s == SDLK_F4 || s == SDLK_PRINTSCREEN || s == SDLK_TAB || s == SDLK_SPACE)) { softkey(3); return; }
     if (s == SDLK_F1) { softkey(0); return; }
     if (s == SDLK_F2) { softkey(1); return; }
     if (s == SDLK_F3) { softkey(4); return; }
@@ -555,11 +556,12 @@ static void on_key(const SDL_KeyboardEvent *k, char *kbuf) {
         break;
     case S_INPUT:
         if (s == SDLK_ESCAPE) screen = S_MENU;
-        else if (enter) start_run();
-        else if (s == SDLK_BACKSPACE) {
-            size_t l = strlen(inputs[mode_idx]);
-            if (l > 0) inputs[mode_idx][l - 1] = 0;
-        } else if (s == 'v' && (mod & KMOD_CTRL)) {
+        else if (s == SDLK_UP) osk_move(-1, 0);
+        else if (s == SDLK_DOWN) osk_move(1, 0);
+        else if (s == SDLK_LEFT) osk_move(0, -1);
+        else if (s == SDLK_RIGHT) osk_move(0, 1);
+        else if (enter) osk_enter();
+        else if (s == 'v' && (mod & KMOD_CTRL)) {
             char *cb = SDL_GetClipboardText();
             if (cb) { append_input(cb); SDL_free(cb); }
         } else if (!(mod & (KMOD_CTRL | KMOD_ALT | KMOD_GUI))) {
@@ -592,6 +594,8 @@ static Key *osk_hit(int x, int y, int *row) {
     for (int i = 0; i < osk_n[r]; i++)
         if (x >= osk[r][i].x && x < osk[r][i].x + osk[r][i].w) {
             *row = r;
+            kb_r = r;
+            kb_c = i;
             flash_row = r;
             flash_col = i;
             flash_until = SDL_GetTicks() + 120;
@@ -615,41 +619,81 @@ static void osk_press(const Key *k) {
     }
 }
 
+static void osk_move(int dr, int dc) {
+    if (dc) {
+        kb_c = (kb_c + dc + osk_n[kb_r]) % osk_n[kb_r];
+        return;
+    }
+    int cx = osk[kb_r][kb_c].x + osk[kb_r][kb_c].w / 2;
+    int r2 = (kb_r + dr + OSK_ROWS) % OSK_ROWS;
+    int best = 0, bd = 1 << 30;
+    for (int i = 0; i < osk_n[r2]; i++) {
+        int d = osk[r2][i].x + osk[r2][i].w / 2 - cx;
+        if (d < 0) d = -d;
+        if (d < bd) { bd = d; best = i; }
+    }
+    kb_r = r2;
+    kb_c = best;
+}
+
+static void osk_enter(void) {
+    osk_press(&osk[kb_r][kb_c]);
+    flash_row = kb_r;
+    flash_col = kb_c;
+    flash_until = SDL_GetTicks() + 120;
+}
+
 #define MENU_Y0 13
 #define MENU_P 10
 
-/* n = button slot: 0 = Z, 1 = X, 3 = V, 4 = B */
-static void softkey(int n) {
+/* Button semantics (the five buttons below the screen):
+ *   Z  (X icon)   = close the app
+ *   X  (menu)     = second function: help / clear / top
+ *   V or Backspace = one step back (in the text field: delete a character)
+ *   B  (check)    = OK: open / start / run again
+ */
+static void act_exit(void) { quit = 1; }
+
+static void act_back(void) {
     switch (screen) {
-    case S_MENU:
-        if (n == 0) quit = 1;
-        else if (n == 1) screen = S_HELP;
-        else if (n == 4) activate(sel);
-        break;
-    case S_INPUT:
-        if (n == 0) screen = S_MENU;
-        else if (n == 1) inputs[mode_idx][0] = 0;
-        else if (n == 3) {
-            size_t l = strlen(inputs[mode_idx]);
-            if (l > 0) inputs[mode_idx][l - 1] = 0;
-        } else if (n == 4) start_run();
-        break;
-    case S_RUN:
-        if (n == 0) go_back_from_run();
-        else if (n == 1) scroll_by(-MAXLINES);
-        else if (n == 3) {
-            int max = nlines > VH ? nlines - VH : 0;
-            if (scroll_pos >= max) scroll_by(-MAXLINES);
-            else scroll_by(VH - 1);
-        } else if (n == 4 && finished) start_run();
-        break;
-    case S_HELP:
-        if (n == 0 || n == 4) screen = S_MENU;
-        break;
-    case S_KEYS:
-        if (n == 0) screen = S_MENU;
+    case S_MENU: quit = 1; break;
+    case S_INPUT: {
+        char *in = inputs[mode_idx];
+        size_t l = strlen(in);
+        if (l > 0) in[l - 1] = 0;
+        else screen = S_MENU;
         break;
     }
+    case S_RUN: go_back_from_run(); break;
+    default: screen = S_MENU; break;
+    }
+}
+
+static void act_menu(void) {
+    switch (screen) {
+    case S_MENU: screen = S_HELP; break;
+    case S_INPUT: inputs[mode_idx][0] = 0; break;
+    case S_RUN: scroll_by(-MAXLINES); break;
+    default: screen = S_MENU; break;
+    }
+}
+
+static void act_ok(void) {
+    switch (screen) {
+    case S_MENU: activate(sel); break;
+    case S_INPUT: start_run(); break;
+    case S_RUN: if (finished) start_run(); break;
+    case S_HELP: screen = S_MENU; break;
+    default: break;
+    }
+}
+
+/* n = button slot: 0 = Z, 1 = X, 3 = V, 4 = B */
+static void softkey(int n) {
+    if (n == 0) act_exit();
+    else if (n == 1) act_menu();
+    else if (n == 3) act_back();
+    else if (n == 4) act_ok();
 }
 
 static void on_click(int px, int py) {
@@ -719,7 +763,8 @@ static void draw_osk(void) {
         for (int i = 0; i < osk_n[r]; i++) {
             const Key *k = &osk[r][i];
             int flash = (r == flash_row && i == flash_col && SDL_GetTicks() < flash_until);
-            int dark = flash || (k->kind == K_SHIFT && shift_on);
+            int focus = (r == kb_r && i == kb_c);
+            int dark = flash || focus;
             rbox(k->x, y, k->w, 16, C_INK, dark ? C_INK : C_PANEL);
             const char *lab;
             char one[2] = {k->ch, 0};
@@ -731,6 +776,10 @@ static void draw_osk(void) {
             }
             int tw = (int)strlen(lab) * CW;
             text_px(k->x + (k->w - tw) / 2, y + 4, lab, dark ? C_LIGHT : C_INK);
+            if (k->kind == K_SHIFT && shift_on) { /* active shift: inner frame */
+                rect(k->x + 3, y + 3, k->w - 6, 1, dark ? C_LIGHT : C_INK);
+                rect(k->x + 3, y + 12, k->w - 6, 1, dark ? C_LIGHT : C_INK);
+            }
         }
     }
 }
@@ -753,7 +802,7 @@ static void draw_input(void) {
     }
     text_px(4, 26, "Own data or with consent only.", C_SOFT);
     draw_osk();
-    softkeys("BACK", "CLEAR", "DEL", "START");
+    softkeys("EXIT", "CLEAR", "DEL", "START");
 }
 
 static void draw_run(void) {
@@ -779,8 +828,8 @@ static void draw_run(void) {
         rect(W - 3, CH, 2, track, C_DARK);
         rect(W - 3, ty, 2, th, C_INK);
     }
-    if (running) softkeys("STOP", "TOP", "PAGE", NULL);
-    else softkeys("BACK", "TOP", "PAGE", "AGAIN");
+    if (running) softkeys("EXIT", "TOP", "STOP", NULL);
+    else softkeys("EXIT", "TOP", "BACK", "AGAIN");
 }
 
 static void draw_help(void) {
@@ -789,9 +838,10 @@ static void draw_help(void) {
         "All-in-one tool for public information:",
         "username, email, phone, domain, IP.",
         "",
-        "Buttons below the screen = tabs above them",
-        "(X back, Menu, Backspace, Check = OK).",
-        "Touch / mouse also works (swipe to scroll).",
+        "Buttons = tabs above them: X exit, Menu,",
+        "Backspace = back, Check = OK. Arrows move",
+        "the keyboard focus, Enter presses a key.",
+        "Touch / mouse works too (swipe to scroll).",
         "",
         "IMPORTANT: only for your own data or",
         "with the consent of the people involved.",
@@ -799,16 +849,16 @@ static void draw_help(void) {
     };
     static const Color red = {150, 18, 0};
     for (size_t i = 0; i < sizeof h / sizeof h[0]; i++)
-        text_px(4, 14 + (int)i * 10, h[i], i >= 7 ? red : C_INK);
-    softkeys("BACK", NULL, NULL, NULL);
+        text_px(4, 14 + (int)i * 10, h[i], i >= 8 ? red : C_INK);
+    softkeys("EXIT", NULL, "BACK", NULL);
 }
 
 static void draw_keys(void) {
     title("KEY TEST", "");
     text_px(4, 12, "Press buttons / tap the screen:", C_INK);
     for (int i = 0; i < keylog_n; i++) text_px(4, 24 + i * 10, keylog[i], i == 0 ? C_INK : C_SOFT);
-    text_px(4, 116, "Z button 3x = back", C_SOFT);
-    softkeys("BACK", NULL, NULL, NULL);
+    text_px(4, 116, "Backspace 3x = back", C_SOFT);
+    softkeys("EXIT", NULL, "BACK", NULL);
 }
 
 static void render(void) {
