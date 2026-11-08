@@ -7,4 +7,17 @@ export APPDIR
 if [ -z "${FLIPCTL_HOSTED:-}" ]; then
     exec flipctl open "${APPIMAGE:-$0}"
 fi
+
+# Startprotokoll (zur Fehlersuche): /tmp/flipperone-osint.log
+LOG="${TMPDIR:-/tmp}/flipperone-osint.log"
+{ [ -f "$LOG" ] && [ "$(wc -c < "$LOG")" -gt 100000 ] && : > "$LOG"; } 2>/dev/null || true
+{
+  echo "== $(date) Start AppRun"
+  echo "HOSTED=${FLIPCTL_HOSTED:-} WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-} DISPLAY=${DISPLAY:-} XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-} SDL_VIDEODRIVER=${SDL_VIDEODRIVER:-}"
+  ls -l "$APPDIR/usr/bin" 2>&1
+} >> "$LOG" 2>&1 || true
+
+if { : >> "$LOG"; } 2>/dev/null; then
+    exec "$APPDIR/usr/bin/osint-ui" "$APPDIR/usr/bin/osint-cli" 2>> "$LOG"
+fi
 exec "$APPDIR/usr/bin/osint-ui" "$APPDIR/usr/bin/osint-cli"

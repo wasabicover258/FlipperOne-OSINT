@@ -19,25 +19,24 @@
 #define CH 8
 #define COLS (W / CW) /* 42 */
 #define ROWS (H / CH) /* 18 */
-#define VH 16         /* sichtbare Ergebniszeilen (Zeilen 1..16) */
+#define VH 15         /* sichtbare Ergebniszeilen (Zeilen 1..15) */
+#define TABH 13       /* Hoehe der Tasten-Leiste unten */
 #define MAXLINES 4000
 #define MAXIN 120
-#define NMODES 7
+#define NMODES 8
 
 #ifndef APP_VERSION
 #define APP_VERSION "dev"
 #endif
 
 typedef struct { Uint8 r, g, b; } Color;
-static const Color C_BG = {12, 12, 12};
-static const Color C_FG = {235, 235, 235};
-static const Color C_OR = {255, 130, 0};
-static const Color C_BLACK = {0, 0, 0};
-static const Color C_DIM = {135, 135, 135};
-static const Color C_GREEN = {80, 220, 100};
-static const Color C_AMBER = {255, 200, 60};
-static const Color C_BAR = {30, 30, 30};
-static const Color C_BOX = {38, 38, 38};
+/* Orange-Stil wie die Flipper-Apps (z.B. nmap) */
+static const Color C_BG = {240, 138, 36};    /* Hintergrund */
+static const Color C_INK = {34, 17, 0};      /* Text / Rahmen */
+static const Color C_PANEL = {251, 166, 68}; /* Felder / Tasten */
+static const Color C_DARK = {196, 98, 4};    /* Abschnittsbalken */
+static const Color C_SOFT = {120, 58, 0};    /* Nebentext */
+static const Color C_LIGHT = {255, 176, 80}; /* Schrift auf Schwarz */
 
 /* ---------- 5x7-Schrift ---------- */
 typedef struct { char c; const char *r[7]; } Glyph;
@@ -132,9 +131,10 @@ static const Mode modes[NMODES] = {
     {"NAME -> USERNAMES", "name", "VOR- UND NACHNAME", "BEISPIEL: MAX MUSTERMANN",
      "ERZEUGT USERNAME-VARIANTEN AUS EINEM", "NAMEN (NUR TEXT, KEINE SUCHE)."},
     {"HILFE / INFO", NULL, NULL, NULL, "BEDIENUNG UND HINWEISE.", ""},
+    {"TASTEN-TEST", NULL, NULL, NULL, "ZEIGT DIE CODES DER FLIPPER-TASTEN", "(X, MENUE, OK ...) UND DES TOUCHS."},
 };
 
-enum { S_MENU, S_INPUT, S_RUN, S_HELP };
+enum { S_MENU, S_INPUT, S_RUN, S_HELP, S_KEYS };
 static int screen = S_MENU;
 static int sel = 0;
 static int mode_idx = 0;
@@ -152,6 +152,18 @@ static int running = 0, finished = 0, got_output = 0;
 static char inbuf[4096];
 static int inlen = 0;
 static const char *cli_path = "osint-cli";
+
+#define NKEYLOG 9
+static char keylog[NKEYLOG][44];
+static int keylog_n = 0, esc_streak = 0;
+static int drag_active = 0, drag_last_y = 0, drag_acc = 0;
+
+static void log_event(const char *fmt, int a, int b, const char *name) {
+    for (int i = NKEYLOG - 1; i > 0; i--) memcpy(keylog[i], keylog[i - 1], sizeof keylog[0]);
+    snprintf(keylog[0], sizeof keylog[0], fmt, name, a, b);
+    if (keylog_n < NKEYLOG) keylog_n++;
+    fprintf(stderr, "%s\n", keylog[0]);
+}
 
 static SDL_Window *win;
 static SDL_Renderer *ren;
@@ -181,7 +193,6 @@ static void rect(int x, int y, int w, int h, Color c) {
     SDL_RenderFillRect(ren, &rc);
 }
 
-static void bar(int row, Color c) { rect(0, row * CH, W, CH, c); }
 
 static void put_char(int x, int y, char c, Color col) {
     if (c >= 'a' && c <= 'z') c = (char)(c - 32);
@@ -193,20 +204,42 @@ static void put_char(int x, int y, char c, Color col) {
     SDL_RenderCopy(ren, atlas, &s, &d);
 }
 
-static void text(int col, int row, const char *s, Color c) {
-    for (int i = 0; s[i] && col + i < COLS; i++) put_char((col + i) * CW, row * CH, s[i], c);
+static void text_px(int x, int y, const char *s, Color c) {
+    for (int i = 0; s[i] && x + i * CW < W; i++) put_char(x + i * CW, y, s[i], c);
+}
+
+static void icon(int x, int y) { /* kleine Lupe */
+    rect(x, y, 5, 1, C_INK);
+    rect(x, y + 4, 5, 1, C_INK);
+    rect(x, y, 1, 5, C_INK);
+    rect(x + 4, y, 1, 5, C_INK);
+    rect(x + 5, y + 5, 2, 2, C_INK);
 }
 
 static void title(const char *left, const char *right) {
-    bar(0, C_OR);
-    text(1, 0, left, C_BLACK);
+    icon(3, 0);
+    text_px(14, 0, left, C_INK);
+    text_px(15, 0, left, C_INK); /* fett */
     int rl = (int)strlen(right);
-    text(COLS - 1 - rl, 0, right, C_BLACK);
+    text_px(W - 4 - rl * CW, 0, right, C_INK);
+    rect(0, CH - 1, W, 1, C_INK);
 }
 
-static void footer(const char *s) {
-    bar(ROWS - 1, C_BAR);
-    text(1, ROWS - 1, s, C_DIM);
+static void tab(int x, const char *s, int primary) {
+    if (!s || !*s) return;
+    int w = 80, y = H - TABH;
+    rect(x, y, w, TABH, C_INK);
+    rect(x + 1, y + 1, w - 2, TABH - 1, primary ? C_INK : C_PANEL);
+    rect(x, y, 1, 1, C_BG); /* runde Ecken oben */
+    rect(x + w - 1, y, 1, 1, C_BG);
+    int tw = (int)strlen(s) * CW;
+    text_px(x + (w - tw) / 2, y + 3, s, primary ? C_LIGHT : C_INK);
+}
+
+static void softkeys(const char *l, const char *m, const char *r) {
+    tab(2, l, 0);
+    tab(88, m, 0);
+    tab(174, r, 1);
 }
 
 /* ---------- Ergebniszeilen ---------- */
@@ -380,11 +413,15 @@ static void start_run(void) {
 
 /* ---------- Eingabe ---------- */
 static void activate(int idx) {
-    if (idx == NMODES - 1) {
+    if (idx == NMODES - 2) {
         screen = S_HELP;
+    } else if (idx == NMODES - 1) {
+        screen = S_KEYS;
+        esc_streak = 0;
     } else {
         mode_idx = idx;
         screen = S_INPUT;
+        SDL_StartTextInput();
     }
 }
 
@@ -424,16 +461,35 @@ static void go_back_from_run(void) {
     screen = S_INPUT;
 }
 
+static void softkey(int n);
+
 static void on_key(const SDL_KeyboardEvent *k, char *kbuf) {
     SDL_Keycode s = k->keysym.sym;
     Uint16 mod = k->keysym.mod;
     int enter = (s == SDLK_RETURN || s == SDLK_KP_ENTER);
+    log_event("TASTE %s SYM=%X SC=%d", (int)s, (int)k->keysym.scancode, SDL_GetKeyName(s));
+    if (screen == S_KEYS) {
+        if (s == SDLK_ESCAPE || s == SDLK_BACKSPACE || s == SDLK_AC_BACK || s == SDLK_CANCEL) {
+            if (++esc_streak >= 3) screen = S_MENU;
+        } else {
+            esc_streak = 0;
+        }
+        return;
+    }
+    /* Flipper-Tasten: X = zurueck, Menue = Hilfe/Neu/Einfuegen, Haken = OK */
+    if (s == SDLK_AC_BACK || s == SDLK_CANCEL) { softkey(0); return; }
+    if (s == SDLK_MENU || s == SDLK_APPLICATION) { softkey(1); return; }
+    if (s == SDLK_SELECT || s == SDLK_EXECUTE) { softkey(2); return; }
+    if (screen == S_RUN && (s == SDLK_F4 || s == SDLK_PRINTSCREEN || s == SDLK_TAB || s == SDLK_SPACE)) { softkey(2); return; }
+    if (s == SDLK_F1) { softkey(0); return; }
+    if (s == SDLK_F2) { softkey(1); return; }
+    if (s == SDLK_F3) { softkey(2); return; }
     switch (screen) {
     case S_MENU:
         if (s == SDLK_UP) sel = (sel + NMODES - 1) % NMODES;
         else if (s == SDLK_DOWN) sel = (sel + 1) % NMODES;
         else if (enter) activate(sel);
-        else if (s >= SDLK_1 && s <= SDLK_7) { sel = (int)(s - SDLK_1); activate(sel); }
+        else if (s >= SDLK_1 && s <= SDLK_8) { sel = (int)(s - SDLK_1); activate(sel); }
         else if (s == SDLK_ESCAPE) quit = 1;
         break;
     case S_INPUT:
@@ -464,6 +520,43 @@ static void on_key(const SDL_KeyboardEvent *k, char *kbuf) {
     case S_HELP:
         if (s == SDLK_ESCAPE || enter) screen = S_MENU;
         break;
+    case S_KEYS:
+        break;
+    }
+}
+
+#define MENU_Y0 13
+#define MENU_P 10
+
+static void softkey(int n) {
+    switch (screen) {
+    case S_MENU:
+        if (n == 0) quit = 1;
+        else if (n == 1) screen = S_HELP;
+        else activate(sel);
+        break;
+    case S_INPUT:
+        if (n == 0) screen = S_MENU;
+        else if (n == 1) {
+            char *cb = SDL_GetClipboardText();
+            if (cb) { append_input(cb); SDL_free(cb); }
+        } else start_run();
+        break;
+    case S_RUN:
+        if (n == 0) go_back_from_run();
+        else if (n == 1) { if (finished) start_run(); }
+        else {
+            int max = nlines > VH ? nlines - VH : 0;
+            if (scroll_pos >= max) scroll_by(-MAXLINES);
+            else scroll_by(VH - 1);
+        }
+        break;
+    case S_HELP:
+        screen = S_MENU;
+        break;
+    case S_KEYS:
+        if (n == 0) screen = S_MENU;
+        break;
     }
 }
 
@@ -472,23 +565,34 @@ static void on_click(int px, int py) {
     SDL_GetWindowSize(win, &ww, &wh);
     if (ww <= 0 || wh <= 0) return;
     int x = px * W / ww, y = py * H / wh;
-    int col = x / CW, row = y / CH;
-    switch (screen) {
-    case S_MENU:
-        if (row >= 2 && row < 2 + NMODES) { sel = row - 2; activate(sel); }
-        break;
-    case S_INPUT:
-        if (row == 12 && col >= 1 && col <= 11) start_run();
-        else if (row == 12 && col >= 14 && col <= 26) screen = S_MENU;
-        else if (row == ROWS - 1) screen = S_MENU;
-        break;
-    case S_RUN:
-        if (row == ROWS - 1) go_back_from_run();
-        break;
-    case S_HELP:
-        screen = S_MENU;
-        break;
+    log_event("%s X=%d Y=%d", x, y, "KLICK");
+    if (screen == S_KEYS) {
+        if (y >= H - TABH && x < 86) screen = S_MENU;
+        return;
     }
+    if (y >= H - TABH) {
+        softkey(x < 86 ? 0 : (x < 172 ? 1 : 2));
+        return;
+    }
+    if (screen == S_MENU) {
+        int i = (y - MENU_Y0) / MENU_P;
+        if (y >= MENU_Y0 && i >= 0 && i < NMODES) { sel = i; activate(sel); }
+    } else if (screen == S_HELP) {
+        screen = S_MENU;
+    }
+}
+
+static void on_drag(int py, int down) {
+    int wh = H, ww = W;
+    SDL_GetWindowSize(win, &ww, &wh);
+    if (wh <= 0) return;
+    int y = py * H / wh;
+    if (down) { drag_active = 1; drag_last_y = y; drag_acc = 0; return; }
+    if (!drag_active || screen != S_RUN) return;
+    drag_acc += drag_last_y - y;
+    drag_last_y = y;
+    while (drag_acc >= CH) { scroll_by(1); drag_acc -= CH; }
+    while (drag_acc <= -CH) { scroll_by(-1); drag_acc += CH; }
 }
 
 static void on_wheel(int dy) {
@@ -498,64 +602,60 @@ static void on_wheel(int dy) {
 
 /* ---------- Bildschirme ---------- */
 static void draw_menu(void) {
-    title("FLIPPERONE OSINT", "V" APP_VERSION);
+    title("OSINT", "V" APP_VERSION);
     for (int i = 0; i < NMODES; i++) {
+        int y = MENU_Y0 + i * MENU_P;
         char b[COLS + 1];
-        snprintf(b, sizeof b, " %d  %s", i + 1, modes[i].label);
+        snprintf(b, sizeof b, "%d  %s", i + 1, modes[i].label);
+        rect(4, y - 1, W - 8, 10, C_INK);
         if (i == sel) {
-            bar(2 + i, C_OR);
-            text(0, 2 + i, b, C_BLACK);
+            text_px(10, y, b, C_LIGHT);
         } else {
-            text(0, 2 + i, b, C_FG);
+            rect(5, y, W - 10, 8, C_PANEL);
+            text_px(10, y, b, C_INK);
         }
     }
-    rect(CW, 10 * CH + 3, W - 2 * CW, 1, C_DIM);
-    text(1, 11, modes[sel].d1, C_DIM);
-    text(1, 12, modes[sel].d2, C_DIM);
-    footer("HOCH/RUNTER ENTER=OK 1-7=WAHL ESC=ENDE");
+    text_px(4, 99, modes[sel].d1, C_SOFT);
+    text_px(4, 108, modes[sel].d2, C_SOFT);
+    softkeys("ENDE", "HILFE", "OEFFNEN");
 }
 
 static void draw_input(void) {
     const Mode *m = &modes[mode_idx];
     char t[COLS + 1];
-    snprintf(t, sizeof t, "OSINT > %s", m->label);
-    title(t, "");
-    char lab[COLS + 1];
-    snprintf(lab, sizeof lab, "%s:", m->prompt);
-    text(1, 3, lab, C_OR);
-    rect(CW - 2, 5 * CH - 3, W - 2 * CW + 4, CH + 6, C_BOX);
+    snprintf(t, sizeof t, "%s", m->prompt);
+    title("OSINT", t);
+    text_px(4, 16, m->prompt, C_INK);
+    rect(4, 27, W - 8, 14, C_INK);
+    rect(5, 28, W - 10, 12, C_PANEL);
     const char *in = inputs[mode_idx];
     int l = (int)strlen(in);
-    int vis = COLS - 4;
+    int vis = (W - 24) / CW;
     const char *shown = l > vis ? in + (l - vis) : in;
-    text(2, 5, shown, C_FG);
-    int cx = 2 + (int)strlen(shown);
-    if ((SDL_GetTicks() / 500) % 2 == 0 && cx < COLS) put_char(cx * CW, 5 * CH, '_', C_OR);
-    text(1, 7, m->example, C_DIM);
-    text(1, 9, "NUR FUER EIGENE DATEN ODER MIT", C_DIM);
-    text(1, 10, "EINWILLIGUNG DER BETROFFENEN NUTZEN.", C_DIM);
-    bar(12, C_BG);
-    rect(CW, 12 * CH - 1, 11 * CW, CH + 2, C_OR);
-    text(2, 12, "START", C_BLACK);
-    rect(14 * CW, 12 * CH - 1, 13 * CW, CH + 2, C_BAR);
-    text(15, 12, "ZURUECK", C_FG);
-    footer("ENTER=START ESC=ZURUECK STRG+V=EINFUEGEN");
+    text_px(10, 31, shown, C_INK);
+    int cx = 10 + (int)strlen(shown) * CW;
+    if ((SDL_GetTicks() / 500) % 2 == 0 && cx < W - 8) put_char(cx, 31, '_', C_INK);
+    text_px(4, 48, m->example, C_SOFT);
+    text_px(4, 72, "NUR FUER EIGENE DATEN ODER MIT", C_SOFT);
+    text_px(4, 81, "EINWILLIGUNG DER BETROFFENEN NUTZEN.", C_SOFT);
+    softkeys("ZURUECK", "EINFUEGEN", "START");
 }
 
 static void draw_run(void) {
     const Mode *m = &modes[mode_idx];
-    char t[COLS + 1];
-    snprintf(t, sizeof t, "OSINT > %s", m->label);
     static const char spin[] = "|/-\\";
-    char right[16];
+    char right[24];
     if (running) snprintf(right, sizeof right, "%c LAEUFT", spin[(SDL_GetTicks() / 120) % 4]);
     else snprintf(right, sizeof right, "FERTIG");
-    title(t, right);
-    static const Color kc[5] = {{235, 235, 235}, {80, 220, 100}, {135, 135, 135}, {255, 200, 60}, {255, 130, 0}};
+    (void)m;
+    title("OSINT", right);
+    static const Color kc[5] = {{34, 17, 0}, {0, 84, 22}, {128, 64, 0}, {150, 18, 0}, {34, 17, 0}};
     for (int r = 0; r < VH; r++) {
         int i = scroll_pos + r;
         if (i >= nlines) break;
-        text(0, 1 + r, lines[i].t, kc[lines[i].kind % 5]);
+        int y = (1 + r) * CH + 1;
+        if (lines[i].kind % 5 == 4) rect(0, y - 1, W - 4, CH, C_DARK);
+        text_px(1, y, lines[i].t, kc[lines[i].kind % 5]);
     }
     if (nlines > VH) {
         int track = VH * CH;
@@ -563,11 +663,11 @@ static void draw_run(void) {
         if (th < 6) th = 6;
         int max = nlines - VH;
         int ty = CH + (track - th) * scroll_pos / (max > 0 ? max : 1);
-        rect(W - 3, CH, 2, track, C_BAR);
-        rect(W - 3, ty, 2, th, C_OR);
+        rect(W - 3, CH, 2, track, C_DARK);
+        rect(W - 3, ty, 2, th, C_INK);
     }
-    footer(running ? "HOCH/RUNTER=SCROLL  ESC=ABBRECHEN"
-                   : "SCROLL=HOCH/RUNTER ENTER=NEU ESC=ZURUECK");
+    if (running) softkeys("STOP", NULL, "SEITE");
+    else softkeys("ZURUECK", "NEU", "SEITE");
 }
 
 static void draw_help(void) {
@@ -576,17 +676,26 @@ static void draw_help(void) {
         "ALLROUNDER FUER OEFFENTLICHE INFOS:",
         "USERNAME, E-MAIL, TELEFON, DOMAIN, IP.",
         "",
-        "BEDIENUNG: HOCH/RUNTER, ENTER, ESC.",
-        "TEXT TIPPEN, STRG+V FUEGT EIN.",
-        "MAUS: KLICK AUF EINTRAEGE, RAD = SCROLL.",
+        "FLIPPER-TASTEN: X = ZURUECK, MENUE = HILFE,",
+        "HAKEN = OK. PFEILE, ENTER, ESC, F1-F3 UND",
+        "TOUCH/MAUS (WISCHEN = SCROLLEN) GEHEN AUCH.",
         "",
         "WICHTIG: NUR FUER EIGENE DATEN ODER",
         "MIT EINWILLIGUNG DER BETROFFENEN.",
         "KEINE PERSONENSUCHE, KEINE HALTERABFRAGE.",
     };
+    static const Color red = {150, 18, 0};
     for (size_t i = 0; i < sizeof h / sizeof h[0]; i++)
-        text(1, 2 + (int)i, h[i], i >= 7 ? C_AMBER : C_FG);
-    footer("ENTER ODER ESC = ZURUECK");
+        text_px(4, 14 + (int)i * 10, h[i], i >= 7 ? red : C_INK);
+    softkeys(NULL, NULL, "ZURUECK");
+}
+
+static void draw_keys(void) {
+    title("TASTEN-TEST", "");
+    text_px(4, 12, "DRUECKE TASTEN / TIPPE AUF DEN SCHIRM:", C_INK);
+    for (int i = 0; i < keylog_n; i++) text_px(4, 24 + i * 10, keylog[i], i == 0 ? C_INK : C_SOFT);
+    text_px(4, 116, "3X X-TASTE = ZURUECK", C_SOFT);
+    softkeys("ZURUECK", NULL, NULL);
 }
 
 static void render(void) {
@@ -597,6 +706,7 @@ static void render(void) {
     case S_INPUT: draw_input(); break;
     case S_RUN: draw_run(); break;
     case S_HELP: draw_help(); break;
+    case S_KEYS: draw_keys(); break;
     }
     SDL_RenderPresent(ren);
 }
@@ -625,7 +735,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Textur: %s\n", SDL_GetError());
         return 1;
     }
-    SDL_StartTextInput();
+    fprintf(stderr, "osint-ui %s: SDL-Treiber %s\n", APP_VERSION, SDL_GetCurrentVideoDriver() ? SDL_GetCurrentVideoDriver() : "?");
 
     while (!quit) {
         SDL_Event e;
@@ -638,8 +748,12 @@ int main(int argc, char **argv) {
                 break;
             case SDL_MOUSEWHEEL: on_wheel(e.wheel.y); break;
             case SDL_MOUSEBUTTONDOWN:
-                if (e.button.button == SDL_BUTTON_LEFT) on_click(e.button.x, e.button.y);
+                if (e.button.button == SDL_BUTTON_LEFT) { on_drag(e.button.y, 1); on_click(e.button.x, e.button.y); }
                 break;
+            case SDL_MOUSEMOTION:
+                if (e.motion.state & SDL_BUTTON_LMASK) on_drag(e.motion.y, 0);
+                break;
+            case SDL_MOUSEBUTTONUP: drag_active = 0; break;
             case SDL_KEYDOWN: on_key(&e.key, kbuf); break;
             default: break;
             }
