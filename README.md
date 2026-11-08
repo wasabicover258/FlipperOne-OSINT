@@ -57,14 +57,34 @@ binaries and runs entirely on the Flipper:
 | Sensitive-path / directory-listing / HTTP-method exposure check | dirb, Nikto |
 | Mail-security grade (SPF, DMARC, DKIM, MTA-STS) | dmarc/spf auditors |
 
+### Correlation and entity graph (SpiderFoot / Recon-ng / Maltego idea)
+
+After the infrastructure tree is built, the tool cross-references the discovered
+entities instead of just listing them:
+
+- **Operator / ASN spread** - how many providers the estate is split across.
+- **Shared hosting** - IPs that serve several subdomains.
+- **Netblock grouping** - mapped IPs that sit in the same /24.
+- **Common services** - which ports recur across the hosts.
+- **Vulnerable-host rollup** - which addresses carry known CVEs.
+- **Pivot candidates** - reverse-DNS names pointing outside the target domain,
+  i.e. related infrastructure worth a follow-up lookup (the Maltego "transform
+  into a new entity" idea, applied to domains and hosts).
+
+It then draws a text **entity graph**: `domain -> operator/ASN -> IP -> hosts`.
+This brings the module/workspace/graph structure of SpiderFoot, Recon-ng and
+Maltego to the app, applied to systems.
+
 ### What is deliberately left out
 
 This is an infrastructure-recon tool. The person-focused OSINT tools from the same
 Kali toolbox — Holehe and Mosint (email to a person's accounts and breaches),
-Sherlock used as an automatic pivot, PhoneInfoga owner lookup, Ignorant, Mr.Holmes
-and Maltego-style person graphs — are intentionally **not** wired in. The tool maps
-systems, not people: it does not take one fragment about a person and assemble a
-profile of them.
+Sherlock used as an automatic pivot, PhoneInfoga owner lookup, Ignorant, Mr.Holmes —
+and commercial people-search / identity-linking platforms such as Pipl, Spokeo,
+ShadowDragon and Babel Street — are intentionally **not** emulated. The tool borrows
+the *framework structure* of SpiderFoot, Recon-ng and Maltego (modules, correlation,
+an entity graph) but applies it to **systems, not people**: it does not take one
+fragment about a person and assemble a profile of them.
 
 ## Controls
 

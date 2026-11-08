@@ -845,4 +845,7 @@ func infraTree(d string, hostIPs map[string][]string) {
 	} else {
 		info("No known CVEs on the mapped hosts (Shodan InternetDB)")
 	}
+
+	// SpiderFoot/Maltego-style cross-entity correlation and a relationship graph.
+	correlate(d, ips[:topN], ipHosts, data, liveOpen)
 }

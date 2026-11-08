@@ -155,7 +155,7 @@ static const Mode modes[NMODES] = {
     {"Phone number", "phone", "Phone number", "e.g. +49 171 1234567",
      "Country, format and line type", "(offline). No owner lookup."},
     {"Domain / recon", "domain", "Domain", "e.g. example.com",
-     "DNS+DNSSEC, zone transfer, mail grade,", "web exposure, live port/CVE tree."},
+     "Full recon, live port/CVE tree,", "entity graph + correlations."},
     {"IP address", "ip", "IP address", "e.g. 8.8.8.8",
      "rDNS, ASN, RDAP, live port scan +", "banners, software and known CVEs."},
 };
