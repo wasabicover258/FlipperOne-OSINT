@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=FlipperOne-OSINT
+Exec=AppRun
+Icon=flipperone-osint
+Categories=Utility;Network;
+Terminal=true
