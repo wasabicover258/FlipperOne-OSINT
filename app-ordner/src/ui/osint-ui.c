@@ -174,6 +174,28 @@ typedef struct { char t[COLS + 1]; unsigned char kind; } Line;
 static Line lines[MAXLINES];
 static int nlines = 0, scroll_pos = 0, follow = 1;
 
+/* Result views: 0 = live/full scroll, 1 = overview (list of sections),
+ * 2 = one section opened from the overview. The overview is an index of
+ * everything found, each row a category the d-pad opens. */
+enum { RV_FULL, RV_OVERVIEW, RV_SECTION };
+static int run_view = RV_FULL;
+static int sec_sel = 0, sec_open = 0, sec_view = 0;
+static int finished_seen = 0;
+#define MAXSEC 128
+static int secHead[MAXSEC];
+static int nsec = 0;
+
+static void rebuild_sections(void) {
+    nsec = 0;
+    for (int i = 0; i < nlines && nsec < MAXSEC; i++)
+        if (lines[i].kind == 4 && lines[i].t[0] == '#') secHead[nsec++] = i;
+}
+
+static void secRange(int i, int *start, int *end) {
+    *start = secHead[i];
+    *end = (i + 1 < nsec) ? secHead[i + 1] : nlines;
+}
+
 static pid_t child = -1;
 static int child_fd = -1;
 static int running = 0, finished = 0, got_output = 0;
@@ -444,6 +466,11 @@ static void start_run(void) {
     inlen = 0;
     finished = 0;
     got_output = 0;
+    run_view = RV_FULL;
+    finished_seen = 0;
+    sec_sel = 0;
+    sec_view = 0;
+    nsec = 0;
     screen = S_RUN;
     if (spawn_cli(modes[mode_idx].cmd, in) != 0) {
         push_result("! Could not start backend");
@@ -507,11 +534,20 @@ static char key_char(SDL_Keycode s, Uint16 mod) {
 }
 
 static void scroll_by(int d) {
-    int max = nlines > VH ? nlines - VH : 0;
+    int lo = 0, hi;
+    if (screen == S_RUN && run_view == RV_SECTION && nsec > 0) {
+        int s, e;
+        secRange(sec_open, &s, &e);
+        lo = s;
+        hi = e - VH;
+        if (hi < lo) hi = lo;
+    } else {
+        hi = nlines > VH ? nlines - VH : 0;
+    }
     scroll_pos += d;
-    if (scroll_pos < 0) scroll_pos = 0;
-    if (scroll_pos > max) scroll_pos = max;
-    follow = (scroll_pos >= max);
+    if (scroll_pos < lo) scroll_pos = lo;
+    if (scroll_pos > hi) scroll_pos = hi;
+    follow = (run_view == RV_FULL && scroll_pos >= hi);
 }
 
 static void go_back_from_run(void) {
@@ -633,9 +669,33 @@ static void act_z(void) {
     else quit = 1;
 }
 
+/* X switches between the index and the content:
+ *   running        -> jump to top of the live list
+ *   section view   -> back to the overview
+ *   overview       -> show the full continuous list ("All")
+ *   full (done)    -> back to the overview ("Index")
+ */
 static void act_x(void) {
-    if (screen == S_INPUT) in_move(1);
-    else if (screen == S_RUN) scroll_by(-MAXLINES);
+    if (screen == S_INPUT) {
+        in_move(1);
+        return;
+    }
+    if (screen != S_RUN) return;
+    if (running) {
+        scroll_by(-MAXLINES);
+        return;
+    }
+    if (run_view == RV_SECTION) {
+        run_view = RV_OVERVIEW;
+    } else if (run_view == RV_OVERVIEW) {
+        run_view = RV_FULL;
+        scroll_pos = 0;
+        follow = 0;
+    } else if (nsec > 0) {
+        run_view = RV_OVERVIEW;
+    } else {
+        scroll_by(-MAXLINES);
+    }
 }
 
 static void act_v(void) {
@@ -722,13 +782,29 @@ static void on_key(const SDL_KeyboardEvent *k, char *kbuf) {
         break;
     case S_RUN:
         if (s == SDLK_ESCAPE) go_back_from_run();
-        else if (s == SDLK_UP) scroll_by(-1);
-        else if (s == SDLK_DOWN) scroll_by(1);
-        else if (s == SDLK_PAGEUP) scroll_by(-(VH - 1));
+        else if (s == SDLK_UP) {
+            if (run_view == RV_OVERVIEW) { if (sec_sel > 0) sec_sel--; }
+            else scroll_by(-1);
+        } else if (s == SDLK_DOWN) {
+            if (run_view == RV_OVERVIEW) { if (sec_sel < nsec - 1) sec_sel++; }
+            else scroll_by(1);
+        } else if (enter) {
+            if (run_view == RV_OVERVIEW && nsec > 0) {
+                sec_open = sec_sel;
+                run_view = RV_SECTION;
+                int st, en;
+                secRange(sec_open, &st, &en);
+                scroll_pos = st;
+                follow = 0;
+            } else if (run_view == RV_SECTION) {
+                run_view = RV_OVERVIEW;
+            } else if (run_view == RV_FULL && finished && nsec > 0) {
+                run_view = RV_OVERVIEW;
+            }
+        } else if (s == SDLK_PAGEUP) scroll_by(-(VH - 1));
         else if (s == SDLK_PAGEDOWN) scroll_by(VH - 1);
         else if (s == SDLK_HOME) scroll_by(-MAXLINES);
         else if (s == SDLK_END) scroll_by(MAXLINES);
-        else if (enter && finished) start_run();
         break;
     }
 }
@@ -754,6 +830,18 @@ static void on_click(int px, int py) {
     if (screen == S_MENU) {
         int i = (y - MENU_Y0 + 2) / MENU_P;
         if (y >= MENU_Y0 - 2 && i >= 0 && i < NMODES) { sel = i; activate(sel); }
+    } else if (screen == S_RUN && run_view == RV_OVERVIEW && y >= HDR) {
+        int r = (y - HDR) / CH;
+        int i = sec_view + r;
+        if (i >= 0 && i < nsec) {
+            sec_sel = i;
+            sec_open = i;
+            run_view = RV_SECTION;
+            int st, en;
+            secRange(sec_open, &st, &en);
+            scroll_pos = st;
+            follow = 0;
+        }
     }
 }
 
@@ -771,7 +859,11 @@ static void on_drag(int py, int down) {
 }
 
 static void on_wheel(int dy) {
-    if (screen == S_RUN) scroll_by(-dy * 3);
+    if (screen == S_RUN && run_view == RV_OVERVIEW) {
+        sec_sel -= dy;
+        if (sec_sel < 0) sec_sel = 0;
+        if (sec_sel > nsec - 1) sec_sel = nsec - 1;
+    } else if (screen == S_RUN) scroll_by(-dy * 3);
     else if (screen == S_MENU) sel = (sel - dy + NMODES * 8) % NMODES;
 }
 
@@ -833,15 +925,13 @@ static void draw_input(void) {
     softkeys("<", ">", "Back", "Start");
 }
 
-static void draw_run(void) {
-    static const char spin[] = "|/-\\";
-    char right[24];
-    if (running) snprintf(right, sizeof right, "%c Running", spin[(SDL_GetTicks() / 120) % 4]);
-    else snprintf(right, sizeof right, "Done");
-    title(right);
+/* draw_lines renders VH rows of the result list, limited to [from, to), with a
+ * scrollbar. Shared by the full view and a single opened section. */
+static void draw_lines(int from, int to) {
     for (int r = 0; r < VH; r++) {
         int i = scroll_pos + r;
-        if (i >= nlines) break;
+        if (i >= to) break;
+        if (i < from) continue;
         int y = HDR + r * CH + 1;
         const Line *ln = &lines[i];
         char mk = ln->t[0];
@@ -856,16 +946,106 @@ static void draw_run(void) {
         else if (mk == '!') rect(5, y + 2, 3, 3, C_RED);
         text_px(12, y, ln->t + 2, tc);
     }
-    if (nlines > VH) {
+    int total = to - from;
+    if (total > VH) {
         int track = VH * CH;
-        int th = track * VH / nlines;
+        int th = track * VH / total;
         if (th < 6) th = 6;
-        int max = nlines - VH;
-        int ty = HDR + (track - th) * scroll_pos / (max > 0 ? max : 1);
+        int mx = total - VH;
+        int ty = HDR + (track - th) * (scroll_pos - from) / (mx > 0 ? mx : 1);
         rect(W - 3, HDR, 1, track, C_FIELD);
         rect(W - 4, ty, 3, th, C_INK);
     }
-    softkeys("Exit", "Top", running ? "Stop" : "Refresh", "Again");
+}
+
+/* Worst-severity dot for a section's lines: red warning, else green finding. */
+static void sev_dot(int x, int y, int st, int en) {
+    int bang = 0, ok = 0;
+    for (int i = st; i < en; i++) {
+        char m = lines[i].t[0];
+        if (m == '!') bang = 1;
+        else if (m == '+') ok = 1;
+    }
+    rect(x, y, 3, 3, bang ? C_RED : (ok ? C_GREEN : C_SOFT));
+}
+
+static void draw_full(void) {
+    static const char spin[] = "|/-\\";
+    char right[24];
+    if (running) snprintf(right, sizeof right, "%c Running", spin[(SDL_GetTicks() / 120) % 4]);
+    else snprintf(right, sizeof right, "All  %d lines", nlines);
+    title(right);
+    draw_lines(0, nlines);
+    softkeys("Exit", running ? "Top" : "Index", running ? "Stop" : "Refresh", "Again");
+}
+
+static void draw_section(void) {
+    int st, en;
+    secRange(sec_open, &st, &en);
+    char right[24];
+    snprintf(right, sizeof right, "%d/%d", sec_open + 1, nsec);
+    title(right);
+    draw_lines(st, en);
+    softkeys("Exit", "Back", "Refresh", "Again");
+}
+
+static void draw_overview(void) {
+    title("Overview");
+    if (nsec == 0) {
+        text_px(12, HDR + 4, "No results", C_SOFT);
+        softkeys("Exit", "All", running ? "Stop" : "Refresh", "Again");
+        return;
+    }
+    if (sec_sel < sec_view) sec_view = sec_sel;
+    if (sec_sel >= sec_view + VH) sec_view = sec_sel - VH + 1;
+    for (int r = 0; r < VH; r++) {
+        int i = sec_view + r;
+        if (i >= nsec) break;
+        int y = HDR + r * CH + 1;
+        int st, en;
+        secRange(i, &st, &en);
+        int sel = (i == sec_sel);
+        if (sel) pill(2, y - 1, W - 6, CH + 1, C_INK);
+        sev_dot(6, y + 2, st + 1, en);
+        text_px(12, y, lines[st].t + 2, sel ? C_LIGHT : C_INK);
+        int plus = 0, bang = 0;
+        for (int k = st + 1; k < en; k++) {
+            char m = lines[k].t[0];
+            if (m == '+') plus++;
+            else if (m == '!') bang++;
+        }
+        char cnt[16];
+        if (bang) snprintf(cnt, sizeof cnt, "+%d !%d", plus, bang);
+        else snprintf(cnt, sizeof cnt, "%d", en - st - 1);
+        int cw = (int)strlen(cnt) * CW;
+        text_px(W - 8 - cw, y, cnt, bang ? C_RED : (sel ? C_LIGHT : C_SOFT));
+    }
+    if (nsec > VH) {
+        int track = VH * CH;
+        int th = track * VH / nsec;
+        if (th < 6) th = 6;
+        int mx = nsec - VH;
+        int ty = HDR + (track - th) * sec_view / (mx > 0 ? mx : 1);
+        rect(W - 3, HDR, 1, track, C_FIELD);
+        rect(W - 4, ty, 3, th, C_INK);
+    }
+    softkeys("Exit", "All", "Refresh", "Again");
+}
+
+static void draw_run(void) {
+    /* When the run finishes, switch from the live list to the overview once. */
+    if (finished && !finished_seen) {
+        finished_seen = 1;
+        rebuild_sections();
+        if (nsec > 0) {
+            run_view = RV_OVERVIEW;
+            sec_sel = 0;
+            sec_view = 0;
+        }
+    }
+    if (run_view == RV_OVERVIEW) draw_overview();
+    else if (run_view == RV_SECTION) draw_section();
+    else draw_full();
 }
 
 static void render(void) {

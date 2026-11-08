@@ -86,6 +86,15 @@ the *framework structure* of SpiderFoot, Recon-ng and Maltego (modules, correlat
 an entity graph) but applies it to **systems, not people**: it does not take one
 fragment about a person and assemble a profile of them.
 
+## Results view
+
+When a search finishes the app shows an **Overview**: one row per result category
+(DNS, Email security, Web exposure, Subdomains, Infrastructure, Correlations,
+Entity graph, ...) with a status dot and a finding count. The d-pad moves between
+categories, **OK** opens one full-screen, **X** switches between this index and the
+full continuous list, and the step-back button returns to the index. This keeps the
+whole result set available but tidy and navigable on the small screen.
+
 ## Controls
 
 The five buttons below the screen reach the app as the keys `Z X C V B`.
