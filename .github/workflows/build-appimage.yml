@@ -4,12 +4,15 @@ on:
   push:
     branches: [main]
     paths:
-      - 'app/**'
+      - 'app-ordner/**'
   workflow_dispatch:
 
 permissions:
   contents: write
   actions: write
+
+env:
+  APPDIR: app-ordner/app/FlipperOneOSINT.AppDir
 
 jobs:
   build:
@@ -20,7 +23,8 @@ jobs:
       - name: Version auslesen
         id: ver
         run: |
-          VER=$(grep -m1 '^VERSION' app/FlipperOneOSINT.AppDir/usr/share/osint/app.py | cut -d'"' -f2)
+          VER=$(grep -m1 '^VERSION' "$APPDIR/usr/share/osint/app.py" | cut -d'"' -f2)
+          echo "Version: $VER"
           echo "version=$VER" >> "$GITHUB_OUTPUT"
 
       - name: appimagetool holen
@@ -32,10 +36,10 @@ jobs:
         env:
           VER: ${{ steps.ver.outputs.version }}
         run: |
-          chmod +x app/FlipperOneOSINT.AppDir/AppRun
+          chmod +x "$APPDIR/AppRun"
           mkdir -p "Public Releases"
           ARCH=x86_64 ./appimagetool --appimage-extract-and-run --no-appstream \
-            app/FlipperOneOSINT.AppDir "Public Releases/FlipperOne-OSINT-${VER}-x86_64.AppImage"
+            "$APPDIR" "Public Releases/FlipperOne-OSINT-${VER}-x86_64.AppImage"
 
       - name: Commit
         env:
