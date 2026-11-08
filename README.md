@@ -16,6 +16,24 @@ There is no people search and no phone-owner lookup by design.
 | Domain | DNS records, RDAP registration, web server and security headers, TLS certificate, subdomains (crt.sh) |
 | IP | rDNS, operator/country (ipinfo.io), open ports and known CVEs (Shodan InternetDB) |
 
+## Controls
+
+The five buttons below the screen reach the app as the keys `Z X C V B`.
+
+| Button | Menu | Input screen | Results |
+|--------|------|--------------|---------|
+| ✕ (Z) | Exit | Cursor left | Exit |
+| ☰ (X) | - | Cursor right | Jump to top |
+| [ ] (V) | - | Back to the menu | Refresh / Stop |
+| ✓ (B) | Open | Start | New search |
+
+The d-pad moves the keyboard focus, Enter presses the focused key, `<` deletes
+and `clr` empties the field. `abc`/`ABC` toggles upper case.
+
+The physical **Bksp** key cannot be used by the app: Flipper OS treats it as the
+system back key and closes the running app (this applies to every app, not just
+this one). That is why the step back inside the app sits on the [ ] button.
+
 ## Layout
 
 - `app-ordner/src/ui/` - SDL2 user interface (C), touch + on-screen keyboard + Flipper buttons

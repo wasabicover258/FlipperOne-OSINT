@@ -2,6 +2,7 @@
 
 | Version | File | Change |
 |---------|------|--------|
+| 0.2.8 | `DevBuilds/FlipperOne-OSINT-0.2.8-aarch64.AppImage` | Step back moved to the [ ] button (measured on the device: Flipper OS itself closes the running app on Bksp, for every app, so no app can use that key); Clear moved onto the on-screen keyboard |
 | 0.2.7 | `DevBuilds/FlipperOne-OSINT-0.2.7-aarch64.AppImage` | Physical Bksp key (arrives as a close request from the system) now only steps back; the app can only be closed with Z (Exit) |
 | 0.2.6 | `DevBuilds/FlipperOne-OSINT-0.2.6-aarch64.AppImage` | Backspace can no longer close the app (Esc in the menu removed, held Backspace stops at the empty field instead of running on into the menu) |
 | 0.2.5 | `DevBuilds/FlipperOne-OSINT-0.2.5-aarch64.AppImage` | Cleaner flat UI; keyboard is lowercase by default with a Shift toggle; Name/Help/Key test removed; results tabs Refresh + Again; Backspace only steps back and never closes the app |

@@ -526,7 +526,7 @@ static void activate(int idx) {
 }
 
 /* ---------- on-screen keyboard ---------- */
-enum { K_CHAR, K_BKSP, K_SHIFT, K_SPACE };
+enum { K_CHAR, K_BKSP, K_SHIFT, K_SPACE, K_CLEAR };
 typedef struct { int x, w; char ch; int kind; } Key;
 #define OSK_ROWS 5
 #define OSK_Y0 38
@@ -553,7 +553,8 @@ static void osk_init(void) {
     for (int i = 0; i < 9; i++) osk_add(3, 1 + i, 1, r3[i], K_CHAR);
     const char *r4 = "@_+:/";
     for (int i = 0; i < 5; i++) osk_add(4, i, 1, r4[i], K_CHAR);
-    osk_add(4, 5, 4, ' ', K_SPACE);
+    osk_add(4, 5, 3, ' ', K_SPACE);
+    osk_add(4, 8, 1, 0, K_CLEAR);
     osk_add(4, 9, 1, ',', K_CHAR);
 }
 
@@ -576,6 +577,7 @@ static void osk_press(const Key *k) {
     switch (k->kind) {
     case K_BKSP: in_delete(); break;
     case K_SHIFT: shift_on = !shift_on; break;
+    case K_CLEAR: in_clear(); break;
     default: {
         char c = k->ch;
         if (shift_on && c >= 'a' && c <= 'z') c = (char)(c - 32);
@@ -638,7 +640,9 @@ static void act_x(void) {
 
 static void act_v(void) {
     if (screen == S_INPUT) {
-        in_clear();
+        /* The system swallows the physical Bksp key (it closes the app), so
+         * the step back lives on a button the app actually receives. */
+        screen = S_MENU;
     } else if (screen == S_RUN) {
         if (running) {
             stop_child();
@@ -802,6 +806,7 @@ static void draw_osk(void) {
             case K_BKSP: lab = "<"; break;
             case K_SHIFT: lab = shift_on ? "ABC" : "abc"; break;
             case K_SPACE: lab = "space"; break;
+            case K_CLEAR: lab = "clr"; break;
             default: lab = one;
             }
             int tw = (int)strlen(lab) * CW;
@@ -825,7 +830,7 @@ static void draw_input(void) {
     else text_px(14, 22, in + view_off, C_INK);
     if ((SDL_GetTicks() / 500) % 2 == 0) rect(14 + (c - view_off) * CW - 1, 20, 1, 11, C_INK);
     draw_osk();
-    softkeys("<", ">", "Clear", "Start");
+    softkeys("<", ">", "Back", "Start");
 }
 
 static void draw_run(void) {
@@ -879,7 +884,6 @@ int main(int argc, char **argv) {
     signal(SIGPIPE, SIG_IGN);
     osk_init();
 
-    SDL_SetHint("SDL_QUIT_ON_LAST_WINDOW_CLOSE", "0");
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
@@ -905,25 +909,9 @@ int main(int argc, char **argv) {
     while (!quit) {
         SDL_Event e;
         char tbuf[64] = {0}, kbuf[16] = {0};
-        int close_req = 0;
         while (SDL_PollEvent(&e)) {
             switch (e.type) {
-            case SDL_QUIT:
-                /* The physical Bksp key can arrive as a window-close request
-                 * from the system. It must only step back, never end the app. */
-                fprintf(stderr, "event SDL_QUIT screen=%d\n", screen);
-                close_req = 1;
-                break;
-            case SDL_WINDOWEVENT:
-                if (e.window.event == SDL_WINDOWEVENT_CLOSE) {
-                    fprintf(stderr, "event WINDOW_CLOSE screen=%d\n", screen);
-                    close_req = 1;
-                }
-                break;
-            case SDL_TEXTINPUT:
-                if (btn_char && e.text.text[0] == btn_char && e.text.text[1] == 0) { btn_char = 0; break; }
-                strncat(tbuf, e.text.text, sizeof tbuf - strlen(tbuf) - 1);
-                break;
+            case SDL_QUIT: quit = 1; break;
             case SDL_MOUSEWHEEL: on_wheel(e.wheel.y); break;
             case SDL_MOUSEBUTTONDOWN:
                 if (e.button.button == SDL_BUTTON_LEFT) { on_drag(e.button.y, 1); on_click(e.button.x, e.button.y); }
@@ -936,7 +924,6 @@ int main(int argc, char **argv) {
             default: break;
             }
         }
-        if (close_req) act_back(); /* one step back; the menu ignores it, Z = Exit */
         if (screen == S_INPUT) {
             if (tbuf[0]) { append_input(tbuf); text_seen = 1; }
             else if (!text_seen && kbuf[0]) append_input(kbuf);
