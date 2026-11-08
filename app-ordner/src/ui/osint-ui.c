@@ -680,7 +680,13 @@ static void on_key(const SDL_KeyboardEvent *k, char *kbuf) {
         if (s == 'v') { btn_char = 'v'; softkey(3); return; }
         if (s == 'b') { btn_char = 'b'; softkey(4); return; }
     }
-    if (s == SDLK_AC_BACK || s == SDLK_CANCEL || s == SDLK_BACKSPACE) { act_back(); return; }
+    if (s == SDLK_AC_BACK || s == SDLK_CANCEL || s == SDLK_BACKSPACE) {
+        /* A held key (auto-repeat) must never carry on past the field into
+         * the menu or out of a screen: repeats only delete characters. */
+        if (k->repeat && !(screen == S_INPUT && inputs[mode_idx][0])) return;
+        act_back();
+        return;
+    }
     if (s == SDLK_MENU || s == SDLK_APPLICATION) { act_x(); return; }
     if (s == SDLK_SELECT || s == SDLK_EXECUTE) { softkey(4); return; }
     if (s == SDLK_F1) { softkey(0); return; }
@@ -693,7 +699,6 @@ static void on_key(const SDL_KeyboardEvent *k, char *kbuf) {
         else if (s == SDLK_DOWN) sel = (sel + 1) % NMODES;
         else if (enter) activate(sel);
         else if (s >= SDLK_1 && s <= SDLK_5) { sel = (int)(s - SDLK_1); activate(sel); }
-        else if (s == SDLK_ESCAPE) quit = 1;
         break;
     case S_INPUT:
         if (s == SDLK_ESCAPE) screen = S_MENU;
