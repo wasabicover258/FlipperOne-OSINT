@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "personintel"
+version = "0.1.0"
+description = "PersonIntel - eigenstaendiges OSINT-Modul fuer journalistische Personenrecherche"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "cryptography>=41",
+    "phonenumbers>=8.13",
+]
+
+[project.optional-dependencies]
+ui = ["PySide6>=6.6"]
+keyring = ["keyring>=24"]
+dev = ["pytest>=7"]
+
+[project.scripts]
+personintel = "personintel.__main__:main"
+personintel-cli = "personintel.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+personintel = ["py.typed", "ui/*.svg"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
