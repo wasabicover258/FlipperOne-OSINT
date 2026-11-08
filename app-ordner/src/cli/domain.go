@@ -47,6 +47,8 @@ func runDomain(raw string) {
 	httpCheck(d)
 	head("TLS certificate")
 	tlsCheck(d)
+	head("Web exposure")
+	webExposure(d)
 
 	// Subdomains feed the infrastructure tree, so collect them first.
 	hostIPs := subdomains(d)

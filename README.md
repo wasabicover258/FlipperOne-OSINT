@@ -32,10 +32,39 @@ tooling (no sqlmap, wpscan brute, dir brute-forcing, etc.).
 ### The infrastructure tree (domain module)
 
 Starting from one domain the tool expands outward: it collects subdomains from
-certificate-transparency logs and a DNS sweep of common labels, resolves them,
-groups every host by the IP address behind it, and enriches the busiest addresses
-with their operator/ASN, open ports and known vulnerabilities. The result is a
-single map of the target's whole reachable surface, built from one starting point.
+certificate-transparency logs (crt.sh + certspotter), HackerTarget and a DNS sweep
+of common labels, resolves them, groups every host by the IP address behind it, and
+enriches the busiest addresses with their operator/ASN, a live TCP port scan with
+service banners, and known vulnerabilities. The result is a single map of the
+target's whole reachable surface, built from one starting point.
+
+### Techniques (and the Kali tools they mirror)
+
+Every technique is re-implemented natively in Go, so the app needs no external
+binaries and runs entirely on the Flipper:
+
+| Technique in the app | Kali equivalent |
+|----------------------|-----------------|
+| DNS enumeration incl. SOA/CAA/DNSSEC over DNS-over-HTTPS | dnsrecon, dig |
+| Zone-transfer (AXFR) check over raw TCP DNS | dnsrecon -t axfr |
+| Subdomains from CT logs, HackerTarget and a DNS sweep | theHarvester, Sublist3r |
+| Registration / netblock / abuse contact (RDAP) | whois |
+| Operator, ASN, geolocation | ipinfo.io |
+| Live TCP connect port scan + service/version banners | nmap -sT / -sV |
+| Open ports, software (CPE) and known CVEs from a cached index | Shodan |
+| Web tech / stack fingerprint | WhatWeb |
+| Security-header and TLS grade | testssl.sh, securityheaders |
+| Sensitive-path / directory-listing / HTTP-method exposure check | dirb, Nikto |
+| Mail-security grade (SPF, DMARC, DKIM, MTA-STS) | dmarc/spf auditors |
+
+### What is deliberately left out
+
+This is an infrastructure-recon tool. The person-focused OSINT tools from the same
+Kali toolbox — Holehe and Mosint (email to a person's accounts and breaches),
+Sherlock used as an automatic pivot, PhoneInfoga owner lookup, Ignorant, Mr.Holmes
+and Maltego-style person graphs — are intentionally **not** wired in. The tool maps
+systems, not people: it does not take one fragment about a person and assemble a
+profile of them.
 
 ## Controls
 

@@ -355,30 +355,3 @@ func hackertargetSubs(d string) map[string][]string {
 	}
 	return out
 }
-
-// zoneTransfer reports whether the domain's nameservers leak the full zone via
-// AXFR (a serious misconfiguration). It uses HackerTarget's zonetransfer probe.
-func zoneTransfer(d string) {
-	resp, body, err := get(client, "https://api.hackertarget.com/zonetransfer/?q="+d)
-	if err != nil || resp.StatusCode != 200 {
-		return
-	}
-	t := strings.TrimSpace(string(body))
-	low := strings.ToLower(t)
-	switch {
-	case t == "" || strings.Contains(low, "error") || strings.Contains(low, "failed") ||
-		strings.Contains(low, "does not allow") || strings.Contains(low, "refused") ||
-		strings.Contains(low, "timed out") || strings.Contains(low, "no ns"):
-		found("Zone transfer (AXFR): refused (good)")
-	case strings.Contains(low, "api count") || strings.Contains(low, "api limit"):
-		// Source rate-limited; say nothing rather than imply a result.
-	default:
-		lines := 0
-		for _, l := range strings.Split(t, "\n") {
-			if strings.TrimSpace(l) != "" {
-				lines++
-			}
-		}
-		warn("Zone transfer (AXFR) ALLOWED - full DNS zone exposed (%d records)", lines)
-	}
-}

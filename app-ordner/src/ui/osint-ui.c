@@ -155,9 +155,9 @@ static const Mode modes[NMODES] = {
     {"Phone number", "phone", "Phone number", "e.g. +49 171 1234567",
      "Country, format and line type", "(offline). No owner lookup."},
     {"Domain / recon", "domain", "Domain", "e.g. example.com",
-     "DNS, mail security, TLS, subdomains", "and an IP/port/CVE infra tree."},
+     "DNS+DNSSEC, zone transfer, mail grade,", "web exposure, live port/CVE tree."},
     {"IP address", "ip", "IP address", "e.g. 8.8.8.8",
-     "rDNS, ASN, RDAP netblock, open", "ports, software and known CVEs."},
+     "rDNS, ASN, RDAP, live port scan +", "banners, software and known CVEs."},
 };
 
 enum { S_MENU, S_INPUT, S_RUN };
