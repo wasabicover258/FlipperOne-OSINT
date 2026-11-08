@@ -13,7 +13,7 @@ import urllib.error
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 INPUT_TYPES = {
     "username": "Username",
     "realname": "Echter Name",
@@ -184,10 +184,19 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    srv = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    import argparse
+    ap = argparse.ArgumentParser(prog="FlipperOne-OSINT")
+    ap.add_argument("--port", type=int, default=0, help="Fester Port (Standard: zufällig)")
+    ap.add_argument("--no-browser", action="store_true", help="Browser nicht automatisch öffnen")
+    args = ap.parse_args()
+    srv = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     url = "http://127.0.0.1:%d/" % srv.server_address[1]
     print("FlipperOne-OSINT %s läuft auf %s (Strg+C zum Beenden)" % (VERSION, url))
-    threading.Timer(0.5, lambda: webbrowser.open(url)).start()
+    if not args.no_browser:
+        def _open():
+            if not webbrowser.open(url):
+                print("Kein Browser gefunden. Öffne diese Adresse manuell:", url)
+        threading.Timer(0.5, _open).start()
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
