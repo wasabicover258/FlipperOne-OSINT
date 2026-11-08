@@ -15,43 +15,107 @@ import (
 //	notcontains 200 and body does NOT contain arg = found
 //	contains    200 and body contains arg = found
 type site struct {
-	name, url, mode, arg string
+	name, url, mode, arg, cat string
 }
 
+// Only platforms with a reliable public existence signal are listed. Sites
+// that return the same page for every name, or that block automated requests
+// (most large social networks), are deliberately left out so a hit means
+// something.
 var sites = []site{
-	{"GitHub", "https://github.com/{u}", "status", ""},
-	{"GitLab", "https://gitlab.com/api/v4/users?username={u}", "notbody", "[]"},
-	{"Codeberg", "https://codeberg.org/{u}", "status", ""},
-	{"Bitbucket", "https://bitbucket.org/{u}/", "status", ""},
-	{"SourceForge", "https://sourceforge.net/u/{u}/profile", "status", ""},
-	{"Launchpad", "https://launchpad.net/~{u}", "status", ""},
-	{"HackerNews", "https://hacker-news.firebaseio.com/v0/user/{u}.json", "notbody", "null"},
-	{"DEV.to", "https://dev.to/api/users/by_username?url={u}", "status", ""},
-	{"DockerHub", "https://hub.docker.com/v2/users/{u}/", "status", ""},
-	{"PyPI", "https://pypi.org/user/{u}/", "status", ""},
-	{"Keybase", "https://keybase.io/_/api/1.0/user/lookup.json?usernames={u}&fields=basics", "contains", "\"basics\""},
-	{"Lichess", "https://lichess.org/api/user/{u}", "status", ""},
-	{"Chess.com", "https://api.chess.com/pub/player/{u}", "status", ""},
-	{"Codeforces", "https://codeforces.com/api/user.info?handles={u}", "status", "400"},
-	{"Mastodon.social", "https://mastodon.social/@{u}", "status", ""},
-	{"Bluesky", "https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor={u}.bsky.social", "status", "400"},
-	{"Gravatar", "https://en.gravatar.com/{u}.json", "status", ""},
-	{"Wikipedia(EN)", "https://en.wikipedia.org/w/api.php?action=query&list=users&ususers={u}&format=json", "notcontains", "\"missing\""},
-	{"OpenStreetMap", "https://www.openstreetmap.org/user/{u}", "status", ""},
-	{"SoundCloud", "https://soundcloud.com/{u}", "status", ""},
-	{"Vimeo", "https://vimeo.com/{u}", "status", ""},
-	{"Flickr", "https://www.flickr.com/people/{u}/", "status", ""},
-	{"Pinterest", "https://www.pinterest.com/{u}/", "status", ""},
-	{"Medium", "https://medium.com/@{u}", "status", ""},
-	{"YouTube", "https://www.youtube.com/@{u}", "status", ""},
-	{"Last.fm", "https://www.last.fm/user/{u}", "status", ""},
-	{"Steam", "https://steamcommunity.com/id/{u}", "notcontains", "The specified profile could not be found"},
-	{"Itch.io", "https://{u}.itch.io/", "status", ""},
-	{"Linktree", "https://linktr.ee/{u}", "status", ""},
-	{"About.me", "https://about.me/{u}", "status", ""},
-	{"Ko-fi", "https://ko-fi.com/{u}", "status", ""},
-	{"Letterboxd", "https://letterboxd.com/{u}/", "status", ""},
-	{"Reddit", "https://www.reddit.com/user/{u}/about.json", "status", ""},
+	// Code / developer
+	{"GitHub", "https://github.com/{u}", "status", "", "dev"},
+	{"GitLab", "https://gitlab.com/api/v4/users?username={u}", "notbody", "[]", "dev"},
+	{"Codeberg", "https://codeberg.org/{u}", "status", "", "dev"},
+	{"Bitbucket", "https://bitbucket.org/{u}/", "status", "", "dev"},
+	{"SourceForge", "https://sourceforge.net/u/{u}/profile", "status", "", "dev"},
+	{"Launchpad", "https://launchpad.net/~{u}", "status", "", "dev"},
+	{"DockerHub", "https://hub.docker.com/v2/users/{u}/", "status", "", "dev"},
+	{"PyPI", "https://pypi.org/user/{u}/", "status", "", "dev"},
+	{"NPM", "https://www.npmjs.com/~{u}", "status", "", "dev"},
+	{"RubyGems", "https://rubygems.org/profiles/{u}", "status", "", "dev"},
+	{"Crates.io", "https://crates.io/api/v1/users/{u}", "status", "", "dev"},
+	{"Packagist", "https://packagist.org/users/{u}/", "status", "", "dev"},
+	{"NuGet", "https://www.nuget.org/profiles/{u}", "status", "", "dev"},
+	{"DEV.to", "https://dev.to/api/users/by_username?url={u}", "status", "", "dev"},
+	{"Hashnode", "https://hashnode.com/@{u}", "status", "", "dev"},
+	{"Replit", "https://replit.com/@{u}", "status", "", "dev"},
+	{"Kaggle", "https://www.kaggle.com/{u}", "status", "", "dev"},
+	{"Keybase", "https://keybase.io/_/api/1.0/user/lookup.json?usernames={u}&fields=basics", "contains", "\"basics\"", "dev"},
+	{"StackOverflow", "https://api.stackexchange.com/2.3/users?inname={u}&site=stackoverflow", "notcontains", "\"items\":[]", "dev"},
+
+	// Security / hacking
+	{"HackerOne", "https://hackerone.com/{u}", "status", "", "security"},
+	{"TryHackMe", "https://tryhackme.com/p/{u}", "status", "", "security"},
+	{"Exploit.in", "https://gitlab.com/api/v4/users?username={u}", "notbody", "[]", "security"},
+
+	// Writing / blogging
+	{"Medium", "https://medium.com/@{u}", "status", "", "writing"},
+	{"WordPress", "https://{u}.wordpress.com", "status", "", "writing"},
+	{"Blogspot", "https://{u}.blogspot.com", "status", "", "writing"},
+	{"Tumblr", "https://{u}.tumblr.com", "status", "", "writing"},
+	{"Substack", "https://{u}.substack.com", "status", "", "writing"},
+	{"Pastebin", "https://pastebin.com/u/{u}", "status", "", "writing"},
+	{"ProductHunt", "https://www.producthunt.com/@{u}", "status", "", "writing"},
+
+	// Social / community
+	{"Reddit", "https://www.reddit.com/user/{u}/about.json", "status", "", "social"},
+	{"Mastodon.social", "https://mastodon.social/@{u}", "status", "", "social"},
+	{"Fosstodon", "https://fosstodon.org/@{u}", "status", "", "social"},
+	{"Bluesky", "https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor={u}.bsky.social", "status", "400", "social"},
+	{"HackerNews", "https://hacker-news.firebaseio.com/v0/user/{u}.json", "notbody", "null", "social"},
+	{"Keyoxide", "https://keyoxide.org/{u}", "status", "", "social"},
+	{"OpenStreetMap", "https://www.openstreetmap.org/user/{u}", "status", "", "social"},
+	{"Gravatar", "https://en.gravatar.com/{u}.json", "status", "", "social"},
+	{"Wikipedia(EN)", "https://en.wikipedia.org/w/api.php?action=query&list=users&ususers={u}&format=json", "notcontains", "\"missing\"", "social"},
+	{"Linktree", "https://linktr.ee/{u}", "status", "", "social"},
+	{"About.me", "https://about.me/{u}", "status", "", "social"},
+	{"Carrd", "https://{u}.carrd.co", "status", "", "social"},
+
+	// Creative / design / photo
+	{"Behance", "https://www.behance.net/{u}", "status", "", "creative"},
+	{"Dribbble", "https://dribbble.com/{u}", "status", "", "creative"},
+	{"DeviantArt", "https://www.deviantart.com/{u}", "status", "", "creative"},
+	{"500px", "https://500px.com/p/{u}", "status", "", "creative"},
+	{"Unsplash", "https://unsplash.com/@{u}", "status", "", "creative"},
+	{"Flickr", "https://www.flickr.com/people/{u}/", "status", "", "creative"},
+	{"Pinterest", "https://www.pinterest.com/{u}/", "status", "", "creative"},
+	{"Instructables", "https://www.instructables.com/member/{u}/", "status", "", "creative"},
+
+	// Music / audio
+	{"SoundCloud", "https://soundcloud.com/{u}", "status", "", "music"},
+	{"Bandcamp", "https://{u}.bandcamp.com", "status", "", "music"},
+	{"Mixcloud", "https://api.mixcloud.com/{u}/", "status", "", "music"},
+	{"Last.fm", "https://www.last.fm/user/{u}", "status", "", "music"},
+	{"Genius", "https://genius.com/{u}", "status", "", "music"},
+
+	// Video
+	{"YouTube", "https://www.youtube.com/@{u}", "status", "", "video"},
+	{"Vimeo", "https://vimeo.com/{u}", "status", "", "video"},
+	{"Dailymotion", "https://www.dailymotion.com/{u}", "status", "", "video"},
+
+	// Gaming
+	{"Steam", "https://steamcommunity.com/id/{u}", "notcontains", "The specified profile could not be found", "gaming"},
+	{"Lichess", "https://lichess.org/api/user/{u}", "status", "", "gaming"},
+	{"Chess.com", "https://api.chess.com/pub/player/{u}", "status", "", "gaming"},
+	{"Codeforces", "https://codeforces.com/api/user.info?handles={u}", "status", "400", "gaming"},
+	{"Speedrun", "https://www.speedrun.com/api/v1/users?lookup={u}", "notcontains", "\"data\":[]", "gaming"},
+	{"osu!", "https://osu.ppy.sh/users/{u}", "status", "", "gaming"},
+	{"Itch.io", "https://{u}.itch.io/", "status", "", "gaming"},
+
+	// Film / books / hobbies
+	{"Letterboxd", "https://letterboxd.com/{u}/", "status", "", "hobby"},
+	{"Trakt", "https://trakt.tv/users/{u}", "status", "", "hobby"},
+	{"MyAnimeList", "https://myanimelist.net/profile/{u}", "status", "", "hobby"},
+	{"Untappd", "https://untappd.com/user/{u}", "status", "", "hobby"},
+
+	// Support the creator / commerce
+	{"Patreon", "https://www.patreon.com/{u}", "status", "", "commerce"},
+	{"Ko-fi", "https://ko-fi.com/{u}", "status", "", "commerce"},
+	{"BuyMeACoffee", "https://www.buymeacoffee.com/{u}", "status", "", "commerce"},
+	{"Gumroad", "https://{u}.gumroad.com", "status", "", "commerce"},
+	{"OpenCollective", "https://opencollective.com/{u}", "status", "", "commerce"},
+	{"Slideshare", "https://www.slideshare.net/{u}", "status", "", "commerce"},
 }
 
 var validUser = regexp.MustCompile(`^[A-Za-z0-9._-]{2,40}$`)
@@ -123,7 +187,7 @@ func checkSite(s site, user string) siteResult {
 // profileURL returns the human-readable profile URL (instead of the API URL).
 func profileURL(s site, user string) string {
 	switch s.name {
-	case "GitLab":
+	case "GitLab", "Exploit.in":
 		return "https://gitlab.com/" + user
 	case "HackerNews":
 		return "https://news.ycombinator.com/user?id=" + user
@@ -147,6 +211,14 @@ func profileURL(s site, user string) string {
 		return "https://en.wikipedia.org/wiki/User:" + user
 	case "Reddit":
 		return "https://www.reddit.com/user/" + user
+	case "Crates.io":
+		return "https://crates.io/users/" + user
+	case "Speedrun":
+		return "https://www.speedrun.com/" + user
+	case "Mixcloud":
+		return "https://www.mixcloud.com/" + user + "/"
+	case "StackOverflow":
+		return "https://stackoverflow.com/users?filter=" + user
 	}
 	return strings.ReplaceAll(s.url, "{u}", user)
 }
@@ -161,7 +233,7 @@ func runUsername(u string) {
 	info("Hit = name is taken there, not necessarily the same person")
 
 	results := make(chan siteResult, len(sites))
-	sem := make(chan struct{}, 8)
+	sem := make(chan struct{}, 12)
 	var wg sync.WaitGroup
 	for _, s := range sites {
 		wg.Add(1)
@@ -177,24 +249,45 @@ func runUsername(u string) {
 		close(results)
 	}()
 
+	byCat := map[string][]siteResult{}
 	var missing, unknown []string
 	hits := 0
 	for r := range results {
 		switch r.state {
 		case stFound:
 			hits++
-			found("%s: %s", r.s.name, r.url)
+			byCat[r.s.cat] = append(byCat[r.s.cat], r)
 		case stMissing:
 			missing = append(missing, r.s.name)
 		default:
 			unknown = append(unknown, r.s.name+"("+r.note+")")
 		}
 	}
+
+	// Print hits grouped by category, so related accounts sit together.
+	catOrder := []struct{ key, label string }{
+		{"dev", "Code / developer"}, {"security", "Security"},
+		{"social", "Social"}, {"writing", "Writing / blog"},
+		{"creative", "Creative / photo"}, {"music", "Music"},
+		{"video", "Video"}, {"gaming", "Gaming"},
+		{"hobby", "Film / books / hobbies"}, {"commerce", "Creator / commerce"},
+	}
+	for _, c := range catOrder {
+		rs := byCat[c.key]
+		if len(rs) == 0 {
+			continue
+		}
+		sort.Slice(rs, func(i, j int) bool { return rs[i].s.name < rs[j].s.name })
+		head("%s", c.label)
+		for _, r := range rs {
+			found("%s: %s", r.s.name, r.url)
+		}
+	}
+
 	sort.Strings(missing)
 	sort.Strings(unknown)
-
 	head("Result")
-	info("Hits: %d of %d", hits, len(sites))
+	info("Hits: %d of %d platforms", hits, len(sites))
 	if len(missing) > 0 {
 		miss("Not taken (%d): %s", len(missing), strings.Join(missing, ", "))
 	}

@@ -1,14 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"net"
 	"strings"
 )
 
 func runIP(raw string) {
 	ip := net.ParseIP(strings.TrimSpace(raw))
-	head("IP check: %s", raw)
+	head("IP recon: %s", raw)
 	if ip == nil {
 		warn("Not a valid IP address")
 		return
@@ -17,91 +16,101 @@ func runIP(raw string) {
 		info("Private/local address: no public data")
 		return
 	}
-	found("Public address (%s)", map[bool]string{true: "IPv4", false: "IPv6"}[ip.To4() != nil])
+	kind := "IPv6"
+	if ip.To4() != nil {
+		kind = "IPv4"
+	}
+	found("Public address (%s)", kind)
 
-	ctx, cancel := dnsCtx(6)
-	names, err := net.DefaultResolver.LookupAddr(ctx, ip.String())
-	cancel()
-	if err == nil && len(names) > 0 {
-		found("rDNS: %s", strings.TrimSuffix(names[0], "."))
+	d := enrichIP(ip.String())
+
+	head("Reverse DNS")
+	if d.rdns != "" {
+		found("rDNS: %s", d.rdns)
 	} else {
 		miss("No rDNS record")
 	}
 
 	head("Network")
-	if resp, body, err := get(client, "https://ipinfo.io/"+ip.String()+"/json"); err != nil || resp.StatusCode != 200 {
-		warn("ipinfo not reachable")
-	} else {
-		var d struct {
-			Org      string `json:"org"`
-			Country  string `json:"country"`
-			Timezone string `json:"timezone"`
-		}
-		if json.Unmarshal(body, &d) == nil {
-			if d.Org != "" {
-				found("Operator (ASN): %s", shorten(d.Org, 70))
-			}
-			if d.Country != "" {
-				found("Country: %s", d.Country)
-			}
-			if d.Timezone != "" {
-				info("Timezone: %s", d.Timezone)
-			}
-		}
+	if d.asn != "" {
+		found("ASN: %s", d.asn)
+	}
+	if d.org != "" {
+		found("Operator: %s", shorten(d.org, 70))
+	}
+	loc := strings.TrimSpace(strings.Join(filterEmpty(d.city, d.region, d.country), ", "))
+	if loc != "" {
+		found("Location: %s", loc)
+	}
+	if !d.ok && d.rdns == "" {
+		warn("No public network data available")
 	}
 
+	head("Registration (RDAP)")
+	rdapIP(ip.String())
+
 	head("Open services (Shodan InternetDB)")
-	resp, body, err := get(client, "https://internetdb.shodan.io/"+ip.String())
-	if err != nil {
-		warn("InternetDB not reachable")
-		return
-	}
-	if resp.StatusCode == 404 {
-		miss("No data for this address")
-		return
-	}
-	var db struct {
-		Ports     []int    `json:"ports"`
-		Hostnames []string `json:"hostnames"`
-		Tags      []string `json:"tags"`
-		Vulns     []string `json:"vulns"`
-	}
-	if resp.StatusCode != 200 || json.Unmarshal(body, &db) != nil {
-		warn("InternetDB: HTTP %d", resp.StatusCode)
-		return
-	}
-	if len(db.Ports) > 0 {
-		var ps []string
-		for _, p := range db.Ports {
-			ps = append(ps, itoa(p))
+	if len(d.ports) > 0 {
+		found("Ports: %s", portsStr(d.ports))
+		// Name the well-known ones so the reader sees the exposed services.
+		var svc []string
+		for _, p := range d.ports {
+			if name, ok := wellKnownPort[p]; ok {
+				svc = append(svc, itoa(p)+"/"+name)
+			}
 		}
-		found("Ports: %s", strings.Join(ps, ", "))
+		if len(svc) > 0 {
+			info("Services: %s", shorten(strings.Join(svc, ", "), 90))
+		}
 	} else {
 		miss("No open ports known")
 	}
-	if len(db.Hostnames) > 0 {
-		info("Hostnames: %s", shorten(strings.Join(db.Hostnames, ", "), 90))
-	}
-	if len(db.Tags) > 0 {
-		info("Tags: %s", strings.Join(db.Tags, ", "))
-	}
-	if len(db.Vulns) > 0 {
-		v := db.Vulns
-		if len(v) > 8 {
-			v = v[:8]
+	if len(d.cpes) > 0 {
+		c := d.cpes
+		if len(c) > 6 {
+			c = c[:6]
 		}
-		warn("Known vulnerabilities (%d): %s", len(db.Vulns), strings.Join(v, ", "))
+		info("Software (CPE): %s", shorten(strings.Join(c, ", "), 90))
 	}
+	if len(d.tags) > 0 {
+		info("Tags: %s", strings.Join(d.tags, ", "))
+	}
+	if len(d.vulns) > 0 {
+		v := d.vulns
+		if len(v) > 10 {
+			v = v[:10]
+		}
+		warn("Known vulnerabilities (%d): %s", len(d.vulns), strings.Join(v, ", "))
+	} else if d.ok {
+		info("No known CVEs for this address")
+	}
+}
+
+func filterEmpty(ss ...string) []string {
+	var out []string
+	for _, s := range ss {
+		if s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func itoa(n int) string {
 	if n == 0 {
 		return "0"
 	}
+	neg := n < 0
+	if neg {
+		n = -n
+	}
 	s := ""
 	for n > 0 {
 		s = string(rune('0'+n%10)) + s
 		n /= 10
+	}
+	if neg {
+		s = "-" + s
 	}
 	return s
 }

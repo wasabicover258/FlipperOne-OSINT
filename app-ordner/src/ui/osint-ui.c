@@ -149,15 +149,15 @@ typedef struct {
 
 static const Mode modes[NMODES] = {
     {"Username", "username", "Username", "e.g. maxmuster",
-     "Checks whether the name is taken on", "30+ public platforms."},
+     "Checks the handle on 70+ public", "platforms, grouped by category."},
     {"Email address", "email", "Email address", "e.g. name@example.com",
-     "Syntax, mail server, SPF/DMARC,", "Gravatar, provider, domain data."},
+     "Provider, mail server and full", "SPF/DMARC/DKIM security grade."},
     {"Phone number", "phone", "Phone number", "e.g. +49 171 1234567",
      "Country, format and line type", "(offline). No owner lookup."},
-    {"Domain / website", "domain", "Domain", "e.g. example.com",
-     "DNS, registrar, web server, TLS,", "headers and subdomains."},
+    {"Domain / recon", "domain", "Domain", "e.g. example.com",
+     "DNS, mail security, TLS, subdomains", "and an IP/port/CVE infra tree."},
     {"IP address", "ip", "IP address", "e.g. 8.8.8.8",
-     "rDNS, operator, country, open ports", "and known vulnerabilities."},
+     "rDNS, ASN, RDAP netblock, open", "ports, software and known CVEs."},
 };
 
 enum { S_MENU, S_INPUT, S_RUN };

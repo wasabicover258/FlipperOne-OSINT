@@ -1,20 +1,30 @@
 # FlipperOne-OSINT
 
-An all-in-one OSINT application for the Flipper One OS (AppImage, ARM64).
-Pick what you have (username, email, phone number, domain, IP address, name) and the
-app gathers publicly available information about it.
+A technical OSINT / reconnaissance application for the Flipper One OS (AppImage, ARM64).
+Give it a domain, an IP address, an email address or a public handle and it maps the
+**infrastructure and public footprint** of that target.
 
-There is no people search and no phone-owner lookup by design.
+This is an infrastructure-recon tool. It investigates domains, hosts, networks and
+deliberately-public accounts. It does **not** do people search, owner lookup for a
+phone number, or automated profiling of a private individual.
 
 ## Modules
 
 | Module | What it does |
 |--------|--------------|
-| Username | Checks 33 public platforms (GitHub, GitLab, Reddit, Steam, ...) whether the name is taken |
-| Email | Syntax, role/disposable/free provider, MX, mail provider, SPF/DMARC, Gravatar, domain registration |
-| Phone | Country, E.164/international format, plausible length, line type (offline) |
-| Domain | DNS records, RDAP registration, web server and security headers, TLS certificate, subdomains (crt.sh) |
-| IP | rDNS, operator/country (ipinfo.io), open ports and known CVEs (Shodan InternetDB) |
+| Domain | Full recon: DNS (A/AAAA/MX/NS/TXT/SOA/CAA via DNS-over-HTTPS), DNSSEC, mail-security grade (SPF lookup budget, DMARC policy, DKIM selectors, MTA-STS), RDAP registration, web server, tech fingerprint, security-header grade, TLS certificate, subdomain discovery (crt.sh + DNS sweep), and a chained **infrastructure tree**: every host grouped by IP, each IP enriched with operator/ASN, open ports and known CVEs |
+| IP | rDNS, ASN and operator (ipinfo.io), RDAP netblock range + abuse contact, open ports with named services, detected software (CPE) and known CVEs (Shodan InternetDB) |
+| Email | Syntax, role/disposable/free provider, MX and mail provider, plus the full domain mail-security grade (SPF, DMARC, DKIM, MTA-STS), Gravatar, domain registration |
+| Username | Checks 70+ public platforms (grouped: developer, security, social, creative, music, gaming, ...) whether the handle is taken, with a direct link to each profile |
+| Phone | Country, E.164/international format, plausible length, line type (fully offline) |
+
+### The infrastructure tree (domain module)
+
+Starting from one domain the tool expands outward: it collects subdomains from
+certificate-transparency logs and a DNS sweep of common labels, resolves them,
+groups every host by the IP address behind it, and enriches the busiest addresses
+with their operator/ASN, open ports and known vulnerabilities. The result is a
+single map of the target's whole reachable surface, built from one starting point.
 
 ## Controls
 

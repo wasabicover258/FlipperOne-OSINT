@@ -2,6 +2,7 @@
 
 | Version | File | Change |
 |---------|------|--------|
+| 1.0.0 | `DevBuilds/FlipperOne-OSINT-1.0.0-aarch64.AppImage` | Major content upgrade. Domain = full recon with DNS-over-HTTPS (CAA, DNSSEC, SOA), mail-security grade (SPF lookups, DMARC policy, DKIM selectors, MTA-STS), tech fingerprint, and a chained infrastructure tree (subdomains via crt.sh + DNS sweep -> unique IPs -> ASN/ports/CVEs). IP = RDAP netblock + abuse contact, CPEs, named services. Username = 70+ platforms grouped by category. Email = full security grade. |
 | 0.2.8 | `DevBuilds/FlipperOne-OSINT-0.2.8-aarch64.AppImage` | Step back moved to the [ ] button (measured on the device: Flipper OS itself closes the running app on Bksp, for every app, so no app can use that key); Clear moved onto the on-screen keyboard |
 | 0.2.7 | `DevBuilds/FlipperOne-OSINT-0.2.7-aarch64.AppImage` | Physical Bksp key (arrives as a close request from the system) now only steps back; the app can only be closed with Z (Exit) |
 | 0.2.6 | `DevBuilds/FlipperOne-OSINT-0.2.6-aarch64.AppImage` | Backspace can no longer close the app (Esc in the menu removed, held Backspace stops at the empty field instead of running on into the menu) |

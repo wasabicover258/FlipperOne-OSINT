@@ -122,34 +122,9 @@ func runEmail(addr string) {
 		}
 	}
 
-	// SPF / DMARC
-	spf, dmarc := "", ""
-	ctx, cancel = dnsCtx(6)
-	txts, _ := net.DefaultResolver.LookupTXT(ctx, domain)
-	cancel()
-	for _, t := range txts {
-		if strings.HasPrefix(strings.ToLower(t), "v=spf1") {
-			spf = t
-		}
-	}
-	ctx, cancel = dnsCtx(6)
-	dtxts, _ := net.DefaultResolver.LookupTXT(ctx, "_dmarc."+domain)
-	cancel()
-	for _, t := range dtxts {
-		if strings.HasPrefix(strings.ToUpper(t), "V=DMARC1") {
-			dmarc = t
-		}
-	}
-	if spf != "" {
-		found("SPF: %s", shorten(spf, 90))
-	} else {
-		miss("SPF: no record")
-	}
-	if dmarc != "" {
-		found("DMARC: %s", shorten(dmarc, 90))
-	} else {
-		miss("DMARC: no record")
-	}
+	// Full email-security posture (SPF, DMARC, DKIM, MTA-STS, grade).
+	head("Email security")
+	mailSecurity(domain)
 
 	// Gravatar (only whether an image exists)
 	head("Public traces")
