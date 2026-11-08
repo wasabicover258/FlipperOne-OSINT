@@ -1,5 +1,6 @@
 name: Build AppImage (DevBuilds)
-# Build-Workflow: baut die ARM64-AppImage nach DevBuilds
+# Baut UI (C/SDL2) + Backend (Go) nativ auf ARM64 und packt eine AppImage nach DevBuilds.
+# Neue Version = Datei app-ordner/VERSION aendern (und pushen).
 
 on:
   push:
@@ -18,42 +19,72 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
 
       - name: Version und Dateiname bestimmen
         id: ver
         run: |
-          VER=$(grep -m1 '^VERSION' "$APPDIR/usr/share/osint/app.py" | cut -d'"' -f2)
+          VER=$(tr -d ' \r\n' < app-ordner/VERSION)
           OUT="$OUT_DIR/FlipperOne-OSINT-${VER}-${ARCH}.AppImage"
           echo "Version: $VER -> $OUT"
           if [ -e "$OUT" ]; then
-            echo "FEHLER: $OUT existiert schon. Bitte VERSION in app.py erhöhen." >&2
+            echo "FEHLER: $OUT existiert schon. Bitte app-ordner/VERSION erhöhen." >&2
             exit 1
           fi
           echo "version=$VER" >> "$GITHUB_OUTPUT"
           echo "out=$OUT" >> "$GITHUB_OUTPUT"
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Backend bauen (Go, statisch)
+        env:
+          VER: ${{ steps.ver.outputs.version }}
+        run: |
+          mkdir -p "$APPDIR/usr/bin"
+          cd app-ordner/src/cli
+          CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.Version=${VER}" -o "$GITHUB_WORKSPACE/$APPDIR/usr/bin/osint-cli" .
+
+      - name: Oberfläche bauen (C, SDL2)
+        env:
+          VER: ${{ steps.ver.outputs.version }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libsdl2-dev
+          gcc -std=gnu99 -O2 -Wall -DAPP_VERSION="\"${VER}\"" app-ordner/src/ui/osint-ui.c \
+            -o "$APPDIR/usr/bin/osint-ui" $(sdl2-config --cflags --libs)
+          strip "$APPDIR/usr/bin/osint-ui"
+
+      - name: Binaries prüfen
+        run: |
+          for f in osint-ui osint-cli; do
+            readelf -h "$APPDIR/usr/bin/$f" | grep -q AArch64 || { echo "FEHLER: $f nicht ARM64" >&2; exit 1; }
+          done
+          echo "Benötigte Bibliotheken der UI:"
+          readelf -d "$APPDIR/usr/bin/osint-ui" | grep NEEDED
+          MAXG=$(objdump -T "$APPDIR/usr/bin/osint-ui" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n1)
+          echo "Höchste GLIBC-Version: $MAXG"
+          [ "$(printf '%s\nGLIBC_2.34\n' "$MAXG" | sort -V | tail -n1)" = "GLIBC_2.34" ] || { echo "FEHLER: GLIBC > 2.34" >&2; exit 1; }
+          "$APPDIR/usr/bin/osint-cli" version
+          "$APPDIR/usr/bin/osint-cli" phone "0171 1234567"
+
       - name: appimagetool holen
         run: |
-          curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-aarch64.AppImage
           chmod +x appimagetool
 
-      - name: AppImage für ARM64 bauen
+      - name: AppImage bauen
         env:
           OUT: ${{ steps.ver.outputs.out }}
         run: |
-          chmod +x "$APPDIR/AppRun"
+          chmod +x "$APPDIR/AppRun" "$APPDIR/usr/bin/"*
           mkdir -p "$OUT_DIR"
-          ./appimagetool --appimage-extract-and-run --no-appstream "$APPDIR" "$OUT"
-
-      - name: Architektur prüfen
-        env:
-          OUT: ${{ steps.ver.outputs.out }}
-        run: |
-          readelf -h "$OUT" | grep -E 'Machine|Class'
+          ARCH=aarch64 ./appimagetool --appimage-extract-and-run --no-appstream "$APPDIR" "$OUT"
           readelf -h "$OUT" | grep -q 'AArch64' || { echo "FEHLER: Datei ist nicht ARM64" >&2; exit 1; }
+          ls -l "$OUT"
 
       - name: Commit nach DevBuilds
         env:
@@ -64,4 +95,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "$OUT"
           git commit -m "DevBuild AppImage ${VER} (${ARCH})"
+          git pull --rebase origin main
           git push origin main
