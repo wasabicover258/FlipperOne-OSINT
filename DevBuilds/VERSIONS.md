@@ -2,6 +2,7 @@
 
 | Version | File | Change |
 |---------|------|--------|
+| 0.2.7 | `DevBuilds/FlipperOne-OSINT-0.2.7-aarch64.AppImage` | Physical Bksp key (arrives as a close request from the system) now only steps back; the app can only be closed with Z (Exit) |
 | 0.2.6 | `DevBuilds/FlipperOne-OSINT-0.2.6-aarch64.AppImage` | Backspace can no longer close the app (Esc in the menu removed, held Backspace stops at the empty field instead of running on into the menu) |
 | 0.2.5 | `DevBuilds/FlipperOne-OSINT-0.2.5-aarch64.AppImage` | Cleaner flat UI; keyboard is lowercase by default with a Shift toggle; Name/Help/Key test removed; results tabs Refresh + Again; Backspace only steps back and never closes the app |
 | 0.2.4 | `DevBuilds/FlipperOne-OSINT-0.2.4-aarch64.AppImage` | Text cursor: Z/X move left/right inside the typed text, V clears, Backspace deletes at the cursor; consent notices removed |

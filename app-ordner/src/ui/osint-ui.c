@@ -879,6 +879,7 @@ int main(int argc, char **argv) {
     signal(SIGPIPE, SIG_IGN);
     osk_init();
 
+    SDL_SetHint("SDL_QUIT_ON_LAST_WINDOW_CLOSE", "0");
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
@@ -904,9 +905,21 @@ int main(int argc, char **argv) {
     while (!quit) {
         SDL_Event e;
         char tbuf[64] = {0}, kbuf[16] = {0};
+        int close_req = 0;
         while (SDL_PollEvent(&e)) {
             switch (e.type) {
-            case SDL_QUIT: quit = 1; break;
+            case SDL_QUIT:
+                /* The physical Bksp key can arrive as a window-close request
+                 * from the system. It must only step back, never end the app. */
+                fprintf(stderr, "event SDL_QUIT screen=%d\n", screen);
+                close_req = 1;
+                break;
+            case SDL_WINDOWEVENT:
+                if (e.window.event == SDL_WINDOWEVENT_CLOSE) {
+                    fprintf(stderr, "event WINDOW_CLOSE screen=%d\n", screen);
+                    close_req = 1;
+                }
+                break;
             case SDL_TEXTINPUT:
                 if (btn_char && e.text.text[0] == btn_char && e.text.text[1] == 0) { btn_char = 0; break; }
                 strncat(tbuf, e.text.text, sizeof tbuf - strlen(tbuf) - 1);
@@ -923,6 +936,7 @@ int main(int argc, char **argv) {
             default: break;
             }
         }
+        if (close_req) act_back(); /* one step back; the menu ignores it, Z = Exit */
         if (screen == S_INPUT) {
             if (tbuf[0]) { append_input(tbuf); text_seen = 1; }
             else if (!text_seen && kbuf[0]) append_input(kbuf);
