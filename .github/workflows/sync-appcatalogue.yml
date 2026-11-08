@@ -10,7 +10,7 @@ on:
 env:
   SOURCE_DIR: "Public Releases"
   TARGET_REPO: wasabicover258/Flipper-Emulator
-  TARGET_DIR: AppCatalogue
+  TARGET_DIR: AppCatalogue/OSINT
   TARGET_BRANCH: main
 
 jobs:
@@ -49,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "emulator/$TARGET_DIR"
-          rm -f emulator/"$TARGET_DIR"/*.AppImage
+          rm -f emulator/"$TARGET_DIR"/FlipperOne-OSINT-*.AppImage
           cp "$FILE" "emulator/$TARGET_DIR/"
           chmod +x emulator/"$TARGET_DIR"/*.AppImage
 
