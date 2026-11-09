@@ -2,7 +2,7 @@ name: Publish ChatGPT Test 1.5 AppImage
 on:
   push:
     branches:
-      - experiment/chatgpt-v1.5-ui
+      - experiment/chatgpt-v1.5-poi
     paths:
       - .github/workflows/experiment-publish-chatgpt-v1.5.yml
   workflow_dispatch:
