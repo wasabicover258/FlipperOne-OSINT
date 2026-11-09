@@ -190,13 +190,13 @@ func main() {
 	// --- combined: infrastructure and person modules in one run, merged ---
 	case "combo-username":
 		runUsername(val)
-		runPerson("username", val, confirmed, store)
+		if confirmed { runPerson("username", val, true, store) }
 	case "combo-email":
 		runEmail(val)
-		runPerson("email", val, confirmed, store)
+		if confirmed { runPerson("email", val, true, store) }
 	case "combo-phone":
 		runPhone(val)
-		runPerson("phone", val, confirmed, store)
+		if confirmed { runPerson("phone", val, true, store) }
 
 	case "person-email":
 		runPerson("email", val, confirmed, store)
