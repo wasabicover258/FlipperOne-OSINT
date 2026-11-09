@@ -1,9 +1,7 @@
 name: Publish ChatGPT Test 2.0.3 AppImage
 # Versioned build: publish only as a NEW file, never overwrite prior AppImages.
+# Published 2.0.3 AppImage is immutable; later versions use new workflow files.
 on:
-  push:
-    branches:
-      - experiment/chatgpt-v2.0.3-list-buttons
   workflow_dispatch:
 
 permissions:
