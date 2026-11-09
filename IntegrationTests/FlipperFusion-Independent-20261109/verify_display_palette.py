@@ -37,7 +37,7 @@ def read_bmp(path: Path):
 
 def check(directory: Path) -> None:
     screenshots = sorted(directory.glob("*.bmp"))
-    assert len(screenshots) >= 7, f"expected 7 screenshots, found {len(screenshots)}"
+    assert len(screenshots) >= 9, f"expected 9 screenshots, found {len(screenshots)}"
     for name in screenshots:
         pixel = read_bmp(name)
         # Full screen: no RGB orange, green, blue, browns, or tinted gray.
@@ -58,6 +58,24 @@ def check(directory: Path) -> None:
     assert menu(8, 22) == (0, 0, 0), f"selected menu bar not black: {menu(8,22)}"
     assert menu(6, 18) == (255, 255, 255) or menu(8, 22) == (0, 0, 0)
     print("PASS selection: selected menu row has black background; text uses inverted white")
+
+    # Regression for the 2.0.3 clickable card design. We check pixels,
+    # not just source constants, so an accidental missing border fails CI.
+    cards = read_bmp(directory / "8-menu-buttons.bmp")
+    assert cards(8, 17) == (0, 0, 0), "unselected menu card is missing its top outline"
+    assert cards(6, 21) == (0, 0, 0), "unselected menu card is missing its side outline"
+    assert cards(8, 22) == (255, 255, 255), "unselected menu card must have white interior"
+    assert cards(8, 37) == (0, 0, 0), "selected menu card must have black interior"
+    assert cards(8, 30) == (255, 255, 255), "rows must have visible white gaps"
+    print("PASS menu buttons: black 1px rounded borders, white interiors, inverse selection, row spacing")
+
+    category = read_bmp(directory / "9-category-buttons.bmp")
+    assert category(6, 22) == (0, 0, 0), "active category should use an inverse black card"
+    assert category(6, 30) == (0, 0, 0), "unselected category card outline absent"
+    assert category(6, 35) == (255, 255, 255), "unselected category card interior must stay white"
+    assert category(6, 29) == (255, 255, 255), "result card spacing should remain white"
+    print("PASS result buttons: 8-card layout, bordered inactive row and selected inverse row")
+
 
 
 if __name__ == "__main__":
