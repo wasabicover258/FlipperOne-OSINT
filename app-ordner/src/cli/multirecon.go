@@ -125,6 +125,7 @@ func runGPS(input string) {
     }
     // Independent radius search runs even when reverse geocoding fails.
     showNearbyPlaces(lat,lon,nearbyRadiusMeters,"")
+    extraWikiGeo(lat,lon)
 }
 
 func runAddress(input string) {
@@ -153,6 +154,7 @@ func runAddress(input string) {
       if !pivoted {
          pivoted=true
          showNearbyPlaces(lat,lon,nearbyRadiusMeters,"")
+         extraWikiGeo(lat,lon)
       }
     }
 }
@@ -256,6 +258,7 @@ func runOrganization(query string) {
            }
         }
     } else {warn("OSM organization search unavailable: %v",err)}
+    extraGLEIFCompany(query)
 }
 
 func isPublicIP(ip net.IP) bool {
@@ -307,6 +310,7 @@ func resolveOrgDomain(org, host, link string, seen map[string]bool) {
 func runRegistry(reg string) {
     reg=strings.TrimSpace(reg)
     if len(reg)<3||len(reg)>70{warn("Invalid registration identifier");return}
+    if extraGLEIFRegistry(reg) {return}
     head("Company registration identifier")
     found("Entered registry ID: %s",reg)
     info("Registry country/jurisdiction must be verified separately.")
@@ -335,6 +339,7 @@ func runVIN(input string) {
     head("Vehicle identification number")
     if !vinRE.MatchString(v){warn("VIN must contain 17 characters (no I, O, Q)");return}
     found("VIN format valid: %s",v)
+    extraVINWMI(v)
     if vinCheckDigit(v){found("VIN check digit: valid (North American algorithm)")}else{
       info("VIN check digit not confirmed (regional rules can differ)")
     }
@@ -367,6 +372,7 @@ func runPlate(input string) {
     found("Normalized plate: %s",v)
     info("Choose a country and consult its official public registers, if permitted.")
     info("No owner, residence, location tracking or automatic plate-to-person search.")
+    extraPlateRegion(v)
 }
 
 func runWallet(raw string) {
@@ -387,6 +393,7 @@ func runWallet(raw string) {
     info("Public explorer: %s",explorer)
     info("An address is not proof of the wallet owner's identity.")
     addOne(KindMeta,strings.ToLower(w),"Public blockchain address","input",explorer)
+    extraBitcoinBalance(w)
 }
 
 func runASN(input string) {
@@ -399,6 +406,7 @@ func runASN(input string) {
     head("Autonomous system %s",asn)
     src:="https://stat.ripe.net/AS"+strconv.FormatUint(n,10)
     info("RIPEstat: %s",src)
+    extraASNRouting(asn)
     u:="https://stat.ripe.net/data/as-overview/data.json?resource="+asn
     var o struct{Data struct{
       Holder string `json:"holder"`
