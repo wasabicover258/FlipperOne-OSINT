@@ -8,6 +8,21 @@ if [ -z "${FLIPCTL_HOSTED:-}" ]; then
     exec flipctl open "${APPIMAGE:-$0}"
 fi
 
+# Optional OSINT AI/Web provider credentials live in the USER's home,
+# never inside the version-controlled AppImage or the application logs.
+# Read only recognized key=value variables (not as shell source code).
+AI_CONFIG="${XDG_CONFIG_HOME:-${HOME:-/home/user}/.config}/flipperone-osint/ai.env"
+if [ -r "$AI_CONFIG" ]; then
+  while IFS='=' read -r KEY VALUE || [ -n "$KEY" ]; do
+    case "$KEY" in
+      BRAVE_SEARCH_API_KEY|AI_CHAT_URL|AI_CHAT_API_KEY|AI_CHAT_MODEL)
+        VALUE=$(printf '%s' "$VALUE" | tr -d '\r')
+        export "$KEY=$VALUE"
+        ;;
+    esac
+  done < "$AI_CONFIG"
+fi
+
 # Start log (for troubleshooting): /tmp/flipperone-osint.log
 LOG="${TMPDIR:-/tmp}/flipperone-osint.log"
 { [ -f "$LOG" ] && [ "$(wc -c < "$LOG")" -gt 100000 ] && : > "$LOG"; } 2>/dev/null || true
