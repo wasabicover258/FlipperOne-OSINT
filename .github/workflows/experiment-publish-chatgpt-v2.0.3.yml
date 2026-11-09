@@ -4,11 +4,6 @@ on:
   push:
     branches:
       - experiment/chatgpt-v2.0.3-list-buttons
-    paths:
-      - .github/workflows/experiment-publish-chatgpt-v2.0.3.yml
-      - app-ordner/src/cli/**
-      - app-ordner/src/ui/**
-      - IntegrationTests/FlipperFusion-Independent-20261109/verify_display_palette.py
   workflow_dispatch:
 
 permissions:
@@ -42,7 +37,7 @@ jobs:
           ( cd app-ordner/src/cli && go mod tidy )
           bash IntegrationTests/FlipperFusion-Independent-20261109/build_arm64.sh
           test -f IntegrationTests/FlipperFusion-Independent-20261109/artifacts/FlipperOne-OSINT-LAB-FUSION-2.0.3-aarch64.AppImage
-      - name: Verify true white background in all offscreen screen renders
+      - name: Check actual SDL2 button borders and 255-background screenshots
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/osint-palette"
