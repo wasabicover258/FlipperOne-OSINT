@@ -152,21 +152,31 @@ func publicPeople(client *http.Client, apiBase, name string) ([]publicPerson, er
 
 func runPublicName(name string) {
     head("Public name search")
-    info("Source: Wikidata; search results are candidates, not identity proof.")
+    info("Wikidata, Wikipedia and GitHub; every match is a candidate.")
     persons, err := publicPeople(client, wikidataAPI, name)
     if err != nil {
-        warn("Public search unavailable: %v",err)
-        info("Requires internet access to www.wikidata.org.")
-        return
-    }
-    if len(persons)==0 { miss("No public Wikidata entries for this spelling."); return }
-    for _, p := range persons {
-        found("%s (%s)",p.Name,p.ID)
-        if p.Description!="" { info("  %s",p.Description) }
-        info("  Source: https://www.wikidata.org/wiki/%s",p.ID)
-        for _, profile := range p.Profiles {
-            emit("~",fmt.Sprintf("  %s: %s [Wikidata claim; verify]",profile.Network,profile.URL))
+        warn("Wikidata unavailable: %v", err)
+    } else if len(persons)==0 {
+        miss("No Wikidata entry for this spelling.")
+    } else {
+        for _,p:=range persons {
+            link:="https://www.wikidata.org/wiki/"+p.ID
+            found("%s (%s)",p.Name,p.ID)
+            if p.Description!=""{ info("  %s",p.Description) }
+            info("  Wikidata source: %s",link)
+            // QID, not display name, is the candidate's key: two different
+            // namesakes are never accidentally merged.
+            store.Add(Record{Kind:KindPerson,Value:p.ID,Title:p.Name,
+                Evidence:EvUnconfirmed,URL:link,Sources:sourced("wikidata","Wikidata public entity",link)})
+            for _,profile:=range p.Profiles{
+                info("  %s listed: %s",profile.Network,profile.URL)
+                store.Add(Record{Kind:KindAccount,Value:profile.URL,Title:profile.Network,
+                    Evidence:EvIndication,URL:profile.URL,
+                    Sources:sourced("wikidata","Wikidata social profile claim",link)})
+                store.Link(KindPerson,p.ID,"public-profile claim",KindAccount,profile.URL,
+                    EvIndication,link)
+            }
         }
     }
-    info("Names can be shared by different people; verify the correct entry.")
+    runPublicNameExtras(name)
 }
