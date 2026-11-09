@@ -136,3 +136,25 @@ func TestValidPublicBusinessInputFields(t *testing.T) {
     }
     _=fmt.Sprintf("%d",len(result.Elements))
 }
+
+func TestPOIAlternateProviderAfterFailure(t *testing.T) {
+    firstCalls,secondCalls:=0,0
+    first:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+        firstCalls++
+        http.Error(w,"temporary Overpass busy",429)
+    }))
+    defer first.Close()
+    second:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+        secondCalls++
+        w.Header().Set("Content-Type","application/json")
+        _,_ = w.Write([]byte(fixtureNearby))
+    }))
+    defer second.Close()
+    c:=&http.Client{Timeout:time.Second}
+    results,err:=nearbyWithFallback(c,first.URL,second.URL,48.086056,11.556722,500)
+    if err!=nil {t.Fatal(err)}
+    if firstCalls!=1||secondCalls!=1{t.Errorf("expected one call per provider, got %d %d",firstCalls,secondCalls)}
+    if len(results)!=2||results[0].Kind!="Clinic"||results[1].Kind!="Restaurant"{
+        t.Fatalf("fallback returned bad POIs: %#v",results)
+    }
+}
