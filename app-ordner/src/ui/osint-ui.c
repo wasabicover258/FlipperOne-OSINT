@@ -169,63 +169,51 @@ typedef struct {
 } Mode;
 
 static const Mode modes[] = {
-    /* Start by selecting the one known identifier, not the tool. */
+    /* One familiar starting point; public checks begin without modal screens.
+     * Third-party account registration probes remain explicit opt-in via CLI. */
     {"Phone number", "combo-phone", "Phone number", "e.g. +49 171 1234567",
-     "Offline number + authorized tools", "in one result view.", MF_ACTIVE},
+     "Number format and public details", "from available sources.", 0},
     {"Email address", "combo-email", "Email address", "e.g. name@example.com",
-     "Mail security + authorized tools.", "Sources stay attributed.", MF_ACTIVE},
+     "Mail provider, DNS and security", "in one result view.", 0},
     {"Username", "combo-username", "Username", "e.g. examplehandle",
-     "Public handle checks + available", "modules in one result view.", MF_ACTIVE},
+     "Checks public account pages", "across available platforms.", 0},
     {"Full name", "person-name", "Full name", "e.g. Donald Trump",
-     "Public Wikidata, Wikipedia, GitHub", "profile candidates with sources.", 0},
+     "Search public Wikidata, Wikipedia", "and GitHub candidate records.", 0},
     {"IPv4 address", "ipv4", "IPv4 address", "e.g. 8.8.8.8",
-     "Network, ASN, public services", "and infrastructure clues.", 0},
+     "Network operator, DNS, services", "and public technical records.", 0},
     {"IPv6 address", "ipv6", "IPv6 address", "e.g. 2606:4700:4700::1111",
-     "IPv6 network, ASN and", "public infrastructure clues.", 0},
-    {"Domain / URL", "website", "Domain, subdomain or URL", "e.g. https://example.com",
-     "DNS, TLS, hosts and related", "public infrastructure in one scan.", 0},
+     "Public IPv6 network records", "and reachable services.", 0},
+    {"Website / domain", "website", "Website URL or domain", "e.g. https://example.com",
+     "DNS, TLS, hosts, technologies", "and related infrastructure.", 0},
     {"GPS coordinates", "gps", "Latitude, longitude", "e.g. 48.137, 11.575",
-     "OSM reverse geocoding and map", "links. No resident lookup.", 0},
-    {"Street address", "address", "Place / address", "e.g. Berlin Alexanderplatz",
-     "Public OSM map features and", "coordinates. No occupants.", 0},
-    {"Company name", "company", "Company name", "e.g. Siemens",
-     "Wikidata + OSM; official site", "and bounded DNS links.", 0},
-    {"Organization", "organization", "Organization", "e.g. Wikimedia Foundation",
-     "Open organizational facts,", "websites and entity links.", 0},
-    {"Registry number", "registry", "Registration identifier", "e.g. HRB 12345",
-     "Registry reference and legal", "lookup portals. No fake matches.", 0},
-    {"Vehicle plate", "plate", "Vehicle registration plate", "e.g. B-AB 1234",
-     "Format only. No owner lookup.", "Select relevant jurisdiction.", 0},
-    {"VIN", "vin", "Vehicle identification no.", "17 letters and digits",
-     "VIN check + NHTSA public", "vehicle specifications.", 0},
-    {"Crypto wallet", "wallet", "Public wallet address", "e.g. 0x123...",
-     "Chain format and public explorer.", "No owner identity claims.", 0},
-    {"AS number", "asn", "Autonomous system", "e.g. AS15169",
-     "RIPEstat holder and announced", "network prefixes.", 0},
+     "Find public map features and", "location descriptions.", 0},
+    {"Address / place", "address", "Place or address", "e.g. Berlin Alexanderplatz",
+     "Map candidates and coordinates.", "No resident information.", 0},
+    {"Company", "company", "Company name", "e.g. Siemens",
+     "Public records, website, DNS", "and organization links.", 0},
+    {"Organization", "organization", "Organization name", "e.g. Wikimedia Foundation",
+     "Public organization sources", "and official websites.", 0},
+    {"Company number", "registry", "Company registration number", "e.g. HRB 12345",
+     "Official register reference.", "Matches need verification.", 0},
+    {"Car license plate", "plate", "Vehicle plate", "e.g. B-AB 1234",
+     "Format validation only.", "No vehicle-owner lookup.", 0},
+    {"Vehicle ID (VIN)", "vin", "Vehicle identification number", "17 letters and digits",
+     "Vehicle model and manufacturer", "from public specifications.", 0},
+    {"Crypto address", "wallet", "Crypto wallet address", "e.g. 0x123...",
+     "Address type and public explorer", "without owner assumptions.", 0},
+    {"Network number", "asn", "Autonomous system number", "e.g. AS15169",
+     "Public operator and network", "prefix information.", 0},
 
-    /* Extra controls and old standalone tools remain available. */
-    {"Tools / setup", "pi-status", "Modules", "",
-     "Configured modules and missing", "runtime/API prerequisites.", MF_NOINPUT},
-    {"Active check setup", "pi-case", "Research purpose", "describe authorized scope",
-     "Required for checks that contact", "account providers.", 0},
-    {"Offline: phone", "phone", "Phone number", "e.g. +49 171 1234567",
-     "Original phone format checks.", "No Python required.", 0},
-    {"System: email", "email", "Email address", "e.g. name@example.com",
-     "Original email and DNS checks.", "No Python required.", 0},
-    {"Public: username", "username", "Username", "e.g. examplehandle",
-     "Original 70-site handle lookup.", "No Python required.", 0},
-    {"Domain: original", "domain", "Domain", "e.g. example.com",
-     "Original domain reconnaissance.", "Preserved for compatibility.", 0},
-    {"IP: original", "ip", "IP address", "e.g. 8.8.8.8",
-     "Original IP reconnaissance.", "Preserved for compatibility.", 0},
-    {"Vendor: name", "vendor-name", "Full name", "e.g. Example Person",
-     "Optional licensed name provider.", "Needs case authorization and key.", MF_ACTIVE},
-    {"Import report", "person-report", "Report file", "/home/user/Files/report.txt",
-     "Import an existing local report.", "Uses the configured PersonIntel bridge.", 0},
-    {"Links & hints", "pi-graph", "Links", "",
-     "Review evidenced relations.", "No unverified automatic linking.", MF_NOINPUT},
-    {"Report", "pi-report", "Report", "",
-     "Sources, evidence and limits", "in one case report.", MF_NOINPUT},
+    {"Check tools", "pi-status", "Modules", "",
+     "Which extra tools are available", "and which still need setup?", MF_NOINPUT},
+    {"Research settings", "pi-case", "Optional case notes", "e.g. research purpose",
+     "Setup for separately authorized", "advanced checks. Not required here.", 0},
+    {"View connections", "pi-graph", "Connections", "",
+     "Relationships and their sources.", "Unverified hints stay marked.", MF_NOINPUT},
+    {"View report", "pi-report", "Report", "",
+     "Review sourced findings and", "what remains unconfirmed.", MF_NOINPUT},
+    {"Import saved report", "person-report", "Report file", "/home/user/Files/report.txt",
+     "Load a previously saved report", "from this device.", 0},
 };
 #define NMODES ((int)(sizeof modes / sizeof modes[0]))
 
@@ -1291,15 +1279,11 @@ static void t_menu(void) {
     const char *first6[] = {"combo-phone", "combo-email", "combo-username", "person-name", "ipv4", "ipv6"};
     for (int i = 0; i < 6; i++)
         T_CHECK(strcmp(modes[i].cmd, first6[i]) == 0, "mode %d is %s, expected %s", i, modes[i].cmd, first6[i]);
-    int found_phone = 0, found_email = 0, found_username = 0;
-    for (int i = 0; i < NMODES; i++) {
-        if (strcmp(modes[i].cmd, "phone") == 0) found_phone = 1;
-        if (strcmp(modes[i].cmd, "email") == 0) found_email = 1;
-        if (strcmp(modes[i].cmd, "username") == 0) found_username = 1;
+    /* Original CLI paths are preserved in Go, but duplicates do not clutter the menu. */
+    for (int i=0;i<NMODES;i++) {
+        T_CHECK(strcmp(modes[i].label, "IP: original")!=0, "confusing old IP menu label");
+        T_CHECK(strcmp(modes[i].label, "Vendor: name")!=0, "confusing vendor menu label");
     }
-    T_CHECK(found_phone, "original phone mode must remain available");
-    T_CHECK(found_email, "original email mode must remain available");
-    T_CHECK(found_username, "original username mode must remain available");
     /* every mode reachable with the d-pad, and the selection stays visible */
     for (int i = 0; i < NMODES; i++) {
         T_CHECK(sel == i, "selection %d, expected %d", sel, i);
@@ -1329,54 +1313,31 @@ static int t_mode_by_cmd(const char *cmd) {
     return -1;
 }
 
-static void t_confirm(void) {
-    /* an active check must not start from the input screen */
+static void t_instant_search(void) {
     t_reset();
-    int idx = t_mode_by_cmd("combo-username");
-    T_CHECK(idx >= 0, "combo-username missing");
-    T_CHECK((modes[idx].flags & MF_ACTIVE) != 0, "combo-username is not marked as active");
-    mode_idx = idx;
-    screen = S_INPUT;
-    strcpy(inputs[idx], "jdoe");
-    request_start();
-    T_CHECK(screen == S_CONFIRM, "expected the confirmation screen, got %d", screen);
-    T_CHECK(run_confirmed == 0, "confirmation must not be pre-set");
-
-    /* OK without ticks does nothing */
-    act_ok();
-    T_CHECK(screen == S_CONFIRM, "started without ticks");
-    act_z();
-    act_ok();
-    T_CHECK(screen == S_CONFIRM, "started with only one tick");
-    T_CHECK(cf_third == 1 && cf_tos == 0, "Z must tick the first statement only");
-    act_x();
-    T_CHECK(cf_tos == 1, "X must tick the second statement");
-
-    /* cancel sends nothing */
-    act_v();
-    T_CHECK(screen == S_INPUT, "cancel must go back to the input screen");
-    T_CHECK(run_confirmed == 0, "cancel must not confirm");
-
-    /* a passive mode starts directly */
+    const char *public_queries[]={"combo-phone","combo-email","combo-username","person-name",
+        "company","website","address","gps"};
+    for (size_t i=0;i<sizeof public_queries/sizeof public_queries[0];i++) {
+        int idx=t_mode_by_cmd(public_queries[i]);
+        T_CHECK(idx>=0, "missing public input mode %s",public_queries[i]);
+        if (idx<0) continue;
+        T_CHECK(!(modes[idx].flags & MF_ACTIVE), "unnecessary confirmation for %s",public_queries[i]);
+        mode_idx=idx;
+        screen=S_INPUT;
+        strcpy(inputs[idx],"example.com");
+        cli_path="/bin/true";
+        request_start();
+        T_CHECK(screen==S_RUN, "public search %s did not start directly",public_queries[i]);
+        stop_child();
+        screen=S_MENU;
+    }
     t_reset();
-    int rep = t_mode_by_cmd("person-report");
-    T_CHECK(rep >= 0 && !(modes[rep].flags & MF_ACTIVE), "person-report must not be an active check");
-    mode_idx = rep;
-    screen = S_INPUT;
-    strcpy(inputs[rep], "/tmp/report.txt");
-    cli_path = "/bin/true";
+    mode_idx=t_mode_by_cmd("combo-username");
+    screen=S_INPUT;
     request_start();
-    T_CHECK(screen == S_RUN, "a passive mode must start directly, got %d", screen);
-    T_CHECK(run_confirmed == 0, "a passive mode must not be marked as confirmed");
-    stop_child();
-
-    /* empty input starts nothing */
-    t_reset();
-    mode_idx = idx;
-    screen = S_INPUT;
-    request_start();
-    T_CHECK(screen == S_INPUT, "empty input must not start anything");
+    T_CHECK(screen==S_INPUT,"empty input must not start a query");
 }
+
 
 static void t_noinput(void) {
     t_reset();
@@ -1486,7 +1447,7 @@ static void t_large_output(void) {
 static int selftest(void) {
     t_menu();
     t_large_output();
-    t_confirm();
+    t_instant_search();
     t_noinput();
     t_markers();
     t_input_editing();
