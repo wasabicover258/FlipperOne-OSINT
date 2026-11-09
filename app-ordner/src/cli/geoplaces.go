@@ -78,7 +78,7 @@ func buildNearbyQuery(lat,lon float64, radius int) string {
         "nwr"+at+"[tourism~\"^(hotel|guest_house|museum|attraction)$\"];" +
         "nwr"+at+"[shop][name];" +
         "nwr"+at+"[office~\"^(company|government|association)$\"];" +
-        ");out center 100;"
+        " );out center 350;"
 }
 
 func cleanField(v string, limit int) string {
@@ -213,7 +213,36 @@ func parseNearbyResults(raw []byte, lat,lon float64, radius int) ([]nearbyPlace,
         if out[i].Distance!=out[j].Distance {return out[i].Distance<out[j].Distance}
         return out[i].ID<out[j].ID
     })
-    if len(out)>nearbyResultLimit {out=out[:nearbyResultLimit]}
+    if len(out)>nearbyResultLimit {
+        // Keep the closest places while reserving space for meaningful
+        // facility categories. Otherwise a dense cluster of shops/cafes
+        // can hide a clinic even when it is inside the chosen radius.
+        chosen:=make([]nearbyPlace,0,nearbyResultLimit)
+        included:=map[string]bool{}
+        add:=func(p nearbyPlace) {
+            if len(chosen)<nearbyResultLimit && !included[p.ID] {
+                chosen=append(chosen,p);included[p.ID]=true
+            }
+        }
+        for _,p:=range out {
+            if len(chosen)>=14 {break}
+            add(p)
+        }
+        for _,category:=range []string{"Clinic","Hospital","Healthcare","Pharmacy","Restaurant","Cafe","Food & drink","Education","Shop"} {
+            added:=0
+            for _,p:=range out {
+                if p.Kind==category && !included[p.ID] {
+                    add(p);added++
+                    if added>=2 {break}
+                }
+            }
+        }
+        for _,p:=range out {add(p)}
+        sort.SliceStable(chosen,func(i,j int)bool{
+            return chosen[i].Distance < chosen[j].Distance
+        })
+        out=chosen
+    }
     return out,nil
 }
 
