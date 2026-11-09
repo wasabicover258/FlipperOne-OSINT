@@ -37,6 +37,13 @@ class JobManager:
     def add_listener(self, fn: Listener) -> None:
         self._listeners.append(fn)
 
+    def remove_listener(self, fn: Listener) -> None:
+        """Entfernt einen Beobachter (z. B. beim Schliessen der Oberflaeche)."""
+        try:
+            self._listeners.remove(fn)
+        except ValueError:
+            pass
+
     def _emit(self, record: QueryRecord) -> None:
         for fn in list(self._listeners):
             try:
