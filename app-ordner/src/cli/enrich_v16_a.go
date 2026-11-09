@@ -11,7 +11,6 @@ import (
  "net"
  "net/http"
  "net/url"
- "regexp"
  "strconv"
  "strings"
  "time"
@@ -201,7 +200,7 @@ func extraIPProvider(value string){
  api:="https://ipwho.is/"+url.PathEscape(ip.String())
  var p extraIPWho
  if err:=extraJSON(extraClient,api,&p);err!=nil{extraMsg("IPWhois",err);return}
- if !p.Success || p.IP!=ip.String(){info("IPWhois returned no verified address match");return}
+ if !p.Success || net.ParseIP(p.IP)==nil || !net.ParseIP(p.IP).Equal(ip){info("IPWhois returned no verified address match");return}
  place:=strings.TrimSpace(strings.Join(filterEmpty(p.City,p.Region,p.Country),", "))
  if place!=""{found("IP location estimate: %s",place)}
  if p.Connection.ASN>0{found("IP ASN independently reported: AS%d",p.Connection.ASN)}
