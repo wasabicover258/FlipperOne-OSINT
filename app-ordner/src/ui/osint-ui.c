@@ -42,19 +42,8 @@
 #endif
 
 typedef struct { Uint8 r, g, b; } Color;
-/* Flipper One look: orange (#FF8200) with dark ink */
-static const Color C_BG = {255, 130, 0};
-static const Color C_INK = {34, 17, 0};
-static const Color C_PILL = {232, 112, 0};   /* flat buttons / rows */
-static const Color C_FIELD = {204, 104, 0};  /* text field */
-static const Color C_SOFT = {128, 62, 0};    /* secondary text */
-static const Color C_LIGHT = {255, 176, 80}; /* text on dark */
-static const Color C_GREEN = {10, 110, 30};
-static const Color C_RED = {160, 20, 0};
-/* evidence levels: proven / indication / unconfirmed */
-static const Color C_PROVEN = {8, 92, 26};
-static const Color C_INDIC = {120, 58, 0};
-static const Color C_UNCONF = {128, 62, 0};
+/* One centralized, monochrome palette. Flipper OS adds orange AFTER rendering. */
+#include "display_palette.h"
 
 /* ---------- 5x8 font (upper and lower case) ---------- */
 typedef struct { char c; const char *r[8]; } Glyph;
@@ -318,6 +307,15 @@ static void pill(int x, int y, int w, int h, Color c) {
     rect(x, y + 2, w, h - 4, c);
 }
 
+/* White fields remain visible against the white background by BLACK frames. */
+static void outline(int x, int y, int w, int h) {
+    if (w < 2 || h < 2) return;
+    rect(x + 1, y, w - 2, 1, C_INK);
+    rect(x + 1, y + h - 1, w - 2, 1, C_INK);
+    rect(x, y + 1, 1, h - 2, C_INK);
+    rect(x + w - 1, y + 1, 1, h - 2, C_INK);
+}
+
 static void put_char(int x, int y, char c, Color col) {
     if (c < 32 || c > 126) c = '?';
     int idx = c - 32;
@@ -358,6 +356,7 @@ static void tab(int slot, const char *s, int primary) {
     if (!s || !*s) return;
     int x = 2 + slot * SLOTW, w = SLOTW - 4, y = H - TABH;
     pill(x, y, w, TABH + 6, primary ? C_INK : C_PILL); /* bottom part is clipped */
+    if (!primary) outline(x, y, w, TABH); /* black boundary on white */
     int tw = (int)strlen(s) * CW;
     text_px(x + (w - tw) / 2, y + 3, s, primary ? C_LIGHT : C_INK);
 }
@@ -1056,6 +1055,7 @@ static void draw_osk(void) {
             int flash = (r == flash_row && i == flash_col && SDL_GetTicks() < flash_until);
             int dark = focus || flash || (k->kind == K_SHIFT && shift_on);
             pill(k->x, y, k->w, 16, dark ? C_INK : C_PILL);
+            if (!dark) outline(k->x, y, k->w, 16);
             const char *lab;
             char one[2] = {k->ch, 0};
             if (k->kind == K_CHAR && shift_on && k->ch >= 'a' && k->ch <= 'z') one[0] = (char)(k->ch - 32);
@@ -1076,6 +1076,7 @@ static void draw_input(void) {
     const Mode *m = &modes[mode_idx];
     title(m->prompt);
     pill(6, 17, W - 12, 17, C_FIELD);
+    outline(6, 17, W - 12, 17);
     const char *in = inputs[mode_idx];
     int l = (int)strlen(in);
     int vis = (W - 28) / CW;
@@ -1276,6 +1277,26 @@ static void t_reset(void) {
     }
 }
 
+static int palette_is_gray(Color c) {
+    return c.r == c.g && c.g == c.b;
+}
+static void t_monochrome_palette(void) {
+    Color colors[] = {
+        C_BG, C_INK, C_LIGHT, C_PILL, C_FIELD, C_SOFT,
+        C_GREEN, C_RED, C_PROVEN, C_INDIC, C_UNCONF
+    };
+    for (size_t i = 0; i < sizeof colors / sizeof colors[0]; i++)
+        T_CHECK(palette_is_gray(colors[i]),
+                "palette role %zu has colored components (%u,%u,%u)",
+                i, colors[i].r, colors[i].g, colors[i].b);
+    T_CHECK(C_BG.r == 255, "page background must be full-white (255)");
+    T_CHECK(C_FIELD.r == 255 && C_PILL.r == 255,
+            "every light surface must be white");
+    T_CHECK(C_INK.r == 0 && C_LIGHT.r == 255,
+            "selected rows require black background and white text");
+    T_CHECK(C_PROVEN.r == 0 && C_GREEN.r == 0 && C_RED.r == 0,
+            "status markers should use geometry rather than colored ink");
+}
 static void t_menu(void) {
     t_reset();
     T_CHECK(NMODES >= 14, "expected at least 14 modes, got %d", NMODES);
@@ -1542,6 +1563,7 @@ static void t_ai_highlights(void) {
     T_CHECK(run_view==RV_DETAIL,"AI source detail not reachable");
 }
 static int selftest(void) {
+    t_monochrome_palette();
     t_menu();
     t_large_output();
     t_instant_search();
