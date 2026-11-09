@@ -78,7 +78,7 @@ func buildNearbyQuery(lat,lon float64, radius int) string {
         "nwr"+at+"[tourism~\"^(hotel|guest_house|museum|attraction)$\"];" +
         "nwr"+at+"[shop][name];" +
         "nwr"+at+"[office~\"^(company|government|association)$\"];" +
-        " );out center 350;"
+        ");out center 350;"
 }
 
 func cleanField(v string, limit int) string {
