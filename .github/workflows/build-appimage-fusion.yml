@@ -156,6 +156,9 @@ jobs:
           readelf -h "$OUT" | grep -q 'AArch64' || { echo "ERROR: file is not ARM64" >&2; exit 1; }
           ls -l "$OUT"
           sha256sum "$OUT" | tee "$OUT.sha256"
+          # app.toml carries a placeholder in the repository; the substitution above is only
+          # for this build. Restore it, otherwise the commit step finds a dirty tree.
+          git checkout -- "$APPDIR/app.toml"
 
       - name: Smoke test the finished bundle
         env:
