@@ -229,6 +229,7 @@ func runUsername(u string) {
 		return
 	}
 	head("Username check: %s", u)
+	store.Scope(KindAccount, u)
 	info("Checking %d public platforms ...", len(sites))
 	info("Hit = name is taken there, not necessarily the same person")
 
@@ -281,6 +282,11 @@ func runUsername(u string) {
 		head("%s", c.label)
 		for _, r := range rs {
 			found("%s: %s", r.s.name, r.url)
+			// Gemeinsames Modell: ein belegter Konto-Hinweis, nie eine Identitaet.
+			store.Add(Record{Kind: KindAccount, Value: r.url, Title: r.s.name + " (" + u + ")",
+				URL: r.url, Evidence: EvIndication, Tags: []string{"username-match"},
+				Sources: []Source{{Module: "username", Description: "HTTP check of " + r.s.name,
+					URL: r.url, RetrievedAt: nowISO(), Active: true}}})
 		}
 	}
 

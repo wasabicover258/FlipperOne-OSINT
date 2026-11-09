@@ -1,8 +1,16 @@
 // osint-cli: backend of FlipperOne-OSINT.
-// Usage: osint-cli <type> <value>
-// Types: username, email, phone, domain, ip
+// Usage: osint-cli <type> <value> [extra]
+// Infrastructure types: username, email, phone, domain, ip
+// Person types (via PersonIntel): person-email, person-username, person-phone,
+//
+//	person-name, person-report, pi-status, pi-case, pi-report, pi-graph
+//
 // Output: one line per result, first character = marker:
 //   - found   - not found   ! warning/unclear   i info   # section heading
+//     = proven  ~ indication  ? unconfirmed  (evidence level of a person finding)
+//
+// "extra" carries the confirmation of an active check, which the UI has obtained from the
+// person at the device ("confirm"). Without it, active person checks are refused.
 package main
 
 import (
@@ -24,9 +32,17 @@ const userAgent = "Mozilla/5.0 (X11; Linux aarch64; rv:120.0) Gecko/20100101 Fir
 
 var outMu sync.Mutex
 
+// store ist das gemeinsame Ergebnis- und Graphmodell beider Haelften (siehe findings.go).
+var store = NewStore()
+
 var asciiRepl = strings.NewReplacer(
 	"ä", "ae", "ö", "oe", "ü", "ue", "Ä", "Ae", "Ö", "Oe", "Ü", "Ue", "ß", "ss",
-	"–", "-", "—", "-", "’", "'", "“", "\"", "”", "\"", "…", "...",
+	"–", "-", "—", "-", "―", "-", "‐", "-",
+	"’", "'", "‘", "'", "‚", "'", "′", "'",
+	"“", "\"", "”", "\"", "„", "\"", "«", "\"", "»", "\"", "″", "\"",
+	"…", "...", "•", "*", "·", "-", "→", "->", "←", "<-", "±", "+/-",
+	"€", "EUR", "£", "GBP", "°", "deg", "×", "x", "™", "(TM)", "©", "(c)", "®", "(R)",
+	"\u00a0", " ", "\u202f", " ", "\u2009", " ",
 )
 
 // ascii makes text displayable in the UI (ASCII 32..126 only).
@@ -109,12 +125,17 @@ func main() {
 	}
 	typ := strings.ToLower(os.Args[1])
 	val := strings.TrimSpace(os.Args[2])
+	extra := ""
+	if len(os.Args) >= 4 {
+		extra = strings.ToLower(strings.TrimSpace(os.Args[3]))
+	}
 	if val == "" || len(val) > 200 {
 		warn("Input empty or too long")
 		os.Exit(0)
 	}
+	confirmed := extra == "confirm" || extra == "confirmed"
 
-	// Safety net: stop after 100 seconds.
+	// Safety net: stop after 150 seconds.
 	go func() {
 		time.Sleep(150 * time.Second)
 		warn("Aborted: time limit reached (150s)")
@@ -122,6 +143,7 @@ func main() {
 	}()
 
 	switch typ {
+	// --- infrastructure (unchanged behaviour) ---
 	case "username":
 		runUsername(val)
 	case "email":
@@ -132,9 +154,46 @@ func main() {
 		runDomain(val)
 	case "ip":
 		runIP(val)
+
+	// --- person research through PersonIntel ---
+	case "pi-status":
+		runPIStatus()
+	case "pi-case":
+		runPICase(val)
+	case "pi-report":
+		runPIReport(val)
+	case "pi-graph":
+		runPIGraph()
+	// --- combined: infrastructure and person modules in one run, merged ---
+	case "combo-username":
+		runUsername(val)
+		runPerson("username", val, confirmed, store)
+	case "combo-email":
+		runEmail(val)
+		runPerson("email", val, confirmed, store)
+	case "combo-phone":
+		runPhone(val)
+		runPerson("phone", val, confirmed, store)
+
+	case "person-email":
+		runPerson("email", val, confirmed, store)
+	case "person-username":
+		runPerson("username", val, confirmed, store)
+	case "person-phone":
+		runPerson("phone", val, confirmed, store)
+	case "person-name":
+		runPerson("name", val, confirmed, store)
+	case "person-report":
+		runPerson("report_file", val, confirmed, store)
 	default:
 		warn("Unknown type: %s", typ)
 	}
+
+	// The shared model only prints when something was collected, so the output of the
+	// infrastructure modules stays exactly as it was when nothing feeds it.
+	store.PrintSummary()
+	store.PrintGraph()
+	store.PrintFollowUps(12)
 }
 
 // ipsOf resolves a name to IP addresses.
@@ -147,3 +206,6 @@ func ipsOf(host string) []string {
 	}
 	return addrs
 }
+
+// nowISO liefert den Zeitstempel für Herkunftsnachweise (UTC, Sekunden).
+func nowISO() string { return time.Now().UTC().Format("2006-01-02T15:04:05Z07:00") }

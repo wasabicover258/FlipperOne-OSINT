@@ -76,6 +76,14 @@ func runEmail(addr string) {
 	found("Syntax valid")
 	at := strings.LastIndex(addr, "@")
 	local, domain := addr[:at], strings.ToLower(addr[at+1:])
+	store.Scope(KindEmail, addr)
+	store.Add(Record{Kind: KindEmail, Value: strings.ToLower(addr), Title: "checked address",
+		Evidence: EvIndication, Sources: []Source{{Module: "email", Description: "syntax and DNS check",
+			RetrievedAt: nowISO()}}})
+	store.Add(Record{Kind: KindHost, Value: domain, Title: "mail domain", Evidence: EvIndication,
+		Sources: []Source{{Module: "email", Description: "domain of the address", RetrievedAt: nowISO()}}})
+	store.Link(KindEmail, strings.ToLower(addr), "uses domain", KindHost, domain, EvIndication,
+		"the address contains this domain")
 
 	// Local part
 	base := strings.ToLower(local)
