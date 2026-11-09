@@ -1,12 +1,7 @@
 name: Publish ChatGPT Test 1.6 AppImage
+# Version 1.6 is already published and must not be overwritten.
+# Future source changes need a NEW version and a NEW publish workflow.
 on:
-  push:
-    branches:
-      - experiment/chatgpt-v1.6-enrichment
-    paths:
-      - .github/workflows/experiment-publish-chatgpt-v1.6.yml
-      - app-ordner/src/cli/**
-      - app-ordner/src/ui/**
   workflow_dispatch:
 
 permissions:
