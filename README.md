@@ -13,7 +13,7 @@ FlipperOne-OSINT ist eine für **Linux ARM64 (aarch64)** entwickelte Open-Source
 
 **[Public Releases öffnen](https://github.com/wasabicover258/FlipperOne-OSINT/tree/main/Public%20Releases)** · **[Flipper-Emulator-AppCatalogue öffnen](https://github.com/wasabicover258/Flipper-Emulator/tree/main/AppCatalogue/OSINT)**
 
-1. Lade die Datei **\`FlipperOne-OSINT-2.0.5-aarch64.AppImage\`** herunter.
+1. Lade die Datei **`FlipperOne-OSINT-2.0.5-aarch64.AppImage`** herunter.
 2. Importiere sie über den App-Store beziehungsweise den Dateimanager deiner Flipper-One-Umgebung.
 3. Öffne die Anwendung **OSINT** über das App-Shelf.
 4. Wähle eine Suchart, gib einen Suchwert ein und starte die Recherche.
@@ -26,9 +26,9 @@ Wenn nach der Aktualisierung noch eine frühere Darstellung oder ein schwarzes I
 |---|---|
 | Version | **2.0.5** |
 | Architektur | **AArch64 / ARM64** |
-| Dateiname | \`FlipperOne-OSINT-2.0.5-aarch64.AppImage\` |
+| Dateiname | `FlipperOne-OSINT-2.0.5-aarch64.AppImage` |
 | Größe | 4.135.432 Byte |
-| SHA-256 | \`5d1568fb1170bc491c02f4d4d36ade7eec426e46c7e83352c1b0945702f3bbc1\` |
+| SHA-256 | `5d1568fb1170bc491c02f4d4d36ade7eec426e46c7e83352c1b0945702f3bbc1` |
 
 Die ARM64-Binärdatei, die Metadaten, das Icon im entpackten AppImage und **343 UI-Selbstprüfungen** wurden im [Build von Version 2.0.5](https://github.com/wasabicover258/FlipperOne-OSINT/actions/runs/42683024791) erfolgreich geprüft. Der erste echte Sichttest der neuen Icon-Darstellung auf deinem Emulator ist davon zu unterscheiden.
 
@@ -56,9 +56,9 @@ Welche Daten tatsächlich erscheinen, hängt von der jeweiligen öffentlichen Qu
 
 Beispiel für eine GPS-Eingabe:
 
-\`\`\`text
+```text
 48.086056, 11.556722
-\`\`\`
+```
 
 Die App sucht nach öffentlich erfassten Einrichtungen in einem **500-Meter-Umkreis** und ordnet die Ergebnisse **aufsteigend nach Entfernung** – der nächste Treffer zuerst, unabhängig davon, ob es sich um ein Restaurant, eine Klinik oder einen anderen Eintrag handelt.
 
@@ -81,13 +81,13 @@ Ein gescannter PDF-Bildinhalt ohne durchsuchbare Textebene wird derzeit nicht au
 
 Für die zusätzlichen Dienste kann unter Flipper Linux diese Datei angelegt werden:
 
-\`\`\`text
+```text
 ~/.config/flipperone-osint/ai.env
-\`\`\`
+```
 
 Beispiel:
 
-\`\`\`ini
+```ini
 # Optional: allgemeine Web- und PDF-Suche
 BRAVE_SEARCH_API_KEY=
 
@@ -95,7 +95,7 @@ BRAVE_SEARCH_API_KEY=
 AI_CHAT_URL=http://127.0.0.1:8080/v1/chat/completions
 AI_CHAT_MODEL=
 AI_CHAT_API_KEY=
-\`\`\`
+```
 
 Der Modellendpunkt muss einen **OpenAI-kompatiblen Chat-Endpunkt** bereitstellen. Für externe Modellanbieter ist HTTPS vorgesehen. Das Modell selbst muss separat installiert oder bereitgestellt werden. Die App zeigt unter **AI search setup**, ob die optionalen Komponenten konfiguriert sind; Zugangsdaten gehören **nicht** ins Repository.
 
@@ -110,7 +110,7 @@ Die Anwendung ist für das kleine Flipper-One-Display ausgelegt:
 - **B (Bestätigen):** In Ergebnislisten einen Stichpunkt, eine Kategorie oder eine Detailansicht öffnen.
 - **X:** Innerhalb der Ergebnisansichten eine Ebene zurück.
 - **Z:** Aus der Recherche zurück zur Startansicht.
-- **Bildschirmtastatur:** \`<\` für Löschen, \`clr\` zum Leeren, \`abc/ABC\` für Groß- und Kleinschreibung.
+- **Bildschirmtastatur:** `<` für Löschen, `clr` zum Leeren, `abc/ABC` für Groß- und Kleinschreibung.
 
 Die Ergebnisse werden zunächst in **Kategorien und Untergruppen** sortiert. Ein Eintrag führt zu seiner Detailansicht und – soweit vorhanden – zum Quellenverweis. Die Oberfläche zeichnet einen **rein weißen Hintergrund**, schwarze Beschriftung und abgerundete Buttons; der Flipper-Emulator färbt diese Graustufen anschließend orange ein.
 
@@ -123,11 +123,11 @@ Die Ergebnisse werden zunächst in **Kategorien und Untergruppen** sortiert. Ein
 | Paket | **AppImage** für AArch64 |
 | Zusätzliche Datenquellen | Unter anderem OpenStreetMap, Wikipedia, OpenAlex, GitHub, GLEIF, RIPEstat und Internet Archive |
 | Optionale Sprachmodell-Auswertung | OpenAI-kompatibler API-Endpunkt; beispielsweise ein separat gestartetes llama.cpp-Modell |
-| Flipper-Shelf | \`app.toml\` und transparentes **14×14-PNG** in der SquashFS-Wurzel |
+| Flipper-Shelf | `app.toml` und transparentes **14×14-PNG** in der SquashFS-Wurzel |
 
 **Wichtige Verzeichnisse:**
 
-\`\`\`text
+```text
 app-ordner/
   src/ui/                         # SDL2-Oberfläche
   src/cli/                        # Go-Recherchemodule
@@ -136,9 +136,9 @@ IntegrationTests/OSINT-ARM64/     # ARM64-Build und Icon-Prüfung
 Public Releases/                  # Nur die aktuelle öffentliche AppImage
 ChatGPT Test/                     # Ältere Test-Builds
 DevBuilds/                        # Entwicklungs- und ältere PC-Pakete
-\`\`\`
+```
 
-Der **aktuelle Quellstand für das veröffentlichte 2.0.5-Paket** liegt im Entwicklungsbranch **[\`experiment/chatgpt-v2.0.5-alpha-icon\`](https://github.com/wasabicover258/FlipperOne-OSINT/tree/experiment/chatgpt-v2.0.5-alpha-icon)**. \`main\` enthält die Veröffentlichung und weitere bestehende Projektdateien; deren Quellstand muss nicht vollständig dem zuletzt veröffentlichten AppImage entsprechen.
+Der **aktuelle Quellstand für das veröffentlichte 2.0.5-Paket** liegt im Entwicklungsbranch **[`experiment/chatgpt-v2.0.5-alpha-icon`](https://github.com/wasabicover258/FlipperOne-OSINT/tree/experiment/chatgpt-v2.0.5-alpha-icon)**. `main` enthält die Veröffentlichung und weitere bestehende Projektdateien; deren Quellstand muss nicht vollständig dem zuletzt veröffentlichten AppImage entsprechen.
 
 ### ARM64-Build
 
@@ -146,11 +146,11 @@ Der [Build-Workflow](https://github.com/wasabicover258/FlipperOne-OSINT/blob/exp
 
 **Neue Veröffentlichungen** sollen immer den Dateinamen
 
-\`\`\`text
+```text
 FlipperOne-OSINT-<version>-aarch64.AppImage
-\`\`\`
+```
 
-erhalten. \`Public Releases\` soll ausschließlich **eine aktuelle, geprüfte ARM64-AppImage** enthalten. Historische Dateien bleiben außerhalb dieses Ordners erhalten.
+erhalten. `Public Releases` soll ausschließlich **eine aktuelle, geprüfte ARM64-AppImage** enthalten. Historische Dateien bleiben außerhalb dieses Ordners erhalten.
 
 ## Grenzen und verantwortungsvolle Nutzung
 
