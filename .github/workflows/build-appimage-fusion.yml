@@ -139,10 +139,18 @@ jobs:
       - name: Build AppImage
         env:
           OUT: ${{ steps.ver.outputs.out }}
+          VER: ${{ steps.ver.outputs.version }}
         run: |
           curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-aarch64.AppImage
           chmod +x appimagetool
           chmod +x "$APPDIR/AppRun" "$APPDIR/usr/bin/"*
+          # The shelf shows app.toml's name. Keep it in step with VERSION, otherwise two
+          # different builds appear under the same name and cannot be told apart.
+          sed -i "s/@VERSION@/${VER}/" "$APPDIR/app.toml"
+          if grep -q "@VERSION@" "$APPDIR/app.toml"; then
+            echo "ERROR: placeholder left in app.toml" >&2; exit 1
+          fi
+          grep '^name' "$APPDIR/app.toml"
           mkdir -p "$OUT_DIR"
           ARCH=aarch64 ./appimagetool --appimage-extract-and-run --no-appstream "$APPDIR" "$OUT"
           readelf -h "$OUT" | grep -q 'AArch64' || { echo "ERROR: file is not ARM64" >&2; exit 1; }
@@ -152,11 +160,13 @@ jobs:
       - name: Smoke test the finished bundle
         env:
           OUT: ${{ steps.ver.outputs.out }}
+          VER: ${{ steps.ver.outputs.version }}
         run: |
           set -eu
           ./"$OUT" --appimage-extract >/dev/null
           test -f squashfs-root/app.toml
           grep -q '^wayland' squashfs-root/app.toml
+          grep -q "^name = \"OSINT ${VER}\"" squashfs-root/app.toml
 
           # The device has no installed PersonIntel: strip it from PATH so the bundled copy is
           # the only one that can answer. Without this the test would silently pass against the

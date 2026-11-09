@@ -1,4 +1,4 @@
 # FlipperOne-OSINT: app shelf entry for Flipper One OS
-name = "OSINT 1.4.1"
+name = "OSINT @VERSION@"
 icon = "flipperone-osint.png"
 wayland = "./AppRun"
