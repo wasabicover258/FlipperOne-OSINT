@@ -13,11 +13,10 @@ import (
   "net"
   "net/http"
   "net/url"
-  "sort"
   "strings"
   "time"
 
-  pdf "rsc.io/pdf"
+  pdf "github.com/giraffesyo/pdf"
 )
 
 const maxPDFBytes=3*1024*1024
@@ -59,35 +58,24 @@ func pdfExcerpt(content []byte,phrase string)(excerpt string,page int,err error)
   defer func(){
     if recovered:=recover();recovered!=nil{err=errors.New("PDF decoding failed");excerpt="";page=0}
   }()
-  r,err:=pdf.NewReader(bytes.NewReader(content),int64(len(content)))
+  ctx,cancel:=context.WithTimeout(context.Background(),5*time.Second)
+  defer cancel()
+  doc,err:=pdf.Extract(ctx,bytes.NewReader(content),int64(len(content)))
   if err!=nil{return "",0,err}
-  pages:=r.NumPage()
-  if pages>12{pages=12}
-  if pages<1{return "",0,errors.New("PDF without readable pages")}
+  if len(doc.Pages)==0{return "",0,errors.New("PDF has no readable pages")}
   needle:=strings.ToLower(strings.Join(strings.Fields(phrase)," "))
-  for n:=1;n<=pages;n++{
-    tokens:=r.Page(n).Content().Text
-    if len(tokens)>30000 {continue}
-    sort.SliceStable(tokens,func(i,j int)bool {
-      if tokens[i].Y!=tokens[j].Y {return tokens[i].Y>tokens[j].Y}
-      return tokens[i].X<tokens[j].X
-    })
-    var b strings.Builder
-    for _,word:=range tokens {
-      if b.Len()>200000{break}
-      b.WriteString(word.S)
-      b.WriteByte(' ')
-    }
-    text:=strings.Join(strings.Fields(b.String())," ")
+  for i,p:=range doc.Pages{
+    if i>=12{break}
+    text:=strings.Join(strings.Fields(p.Text())," ")
+    if len(text)>200000{text=text[:200000]}
     index:=strings.Index(strings.ToLower(text),needle)
     if index<0{continue}
-    start:=index-110
-    if start<0{start=0}
-    end:=index+len(needle)+150
-    if end>len(text){end=len(text)}
-    return text[start:end],n,nil
+    left:=index-115;if left<0{left=0}
+    right:=index+len(needle)+155
+    if right>len(text){right=len(text)}
+    return text[left:right],i+1,nil
   }
-  return "",0,errors.New("searched phrase not found in first 12 readable PDF pages")
+  return "",0,errors.New("searched phrase not found in first 12 text pages")
 }
 
 func readPublicPDFExcerpt(rawURL,phrase string)(string,int,error){
