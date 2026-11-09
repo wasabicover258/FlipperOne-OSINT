@@ -1,0 +1,30 @@
+name: ChatGPT 2.0.1 AI Web and PDF Live Smoke
+on:
+  push:
+    branches:
+      - experiment/chatgpt-v2.0.1-pdf
+    paths:
+      - .github/workflows/experiment-chatgpt-v2.0.1-live.yml
+      - app-ordner/src/cli/ai_v20_live_test.go
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  provider-smoke:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.2'
+      - name: Public Wikipedia, OpenAlex and real PDF document
+        working-directory: app-ordner/src/cli
+        env:
+          OSINT_V20_LIVE: '1'
+        run: |
+          set -euo pipefail
+          go mod tidy
+          go test -v -count=1 -run '^TestLiveAIWebV20$' ./...
