@@ -40,23 +40,15 @@ gcc -std=gnu99 -O2 -Wall -DAPP_VERSION="\"$STAMP\"" \
 cp -a "$ROOT/PersonIntel/src/personintel" "$APP/usr/lib/personintel/"
 find "$APP/usr/lib/personintel" -type d -name '__pycache__' -prune -exec rm -rf {} +
 
-# Validate shelf/desktop metadata and that the actual 128x128 icon is present.
-python3 - "$APP" <<'PY'
-from pathlib import Path
-import struct,sys
-p=Path(sys.argv[1])
-toml=(p/'app.toml').read_text()
-desktop=(p/'flipperone-osint.desktop').read_text()
-assert 'name = "OSINT"' in toml, "shelf must show OSINT"
-assert 'icon = "flipperone-osint.png"' in toml
-assert 'Name=OSINT' in desktop and 'Icon=flipperone-osint' in desktop
-for rel in ('flipperone-osint.png',
-            'usr/share/icons/hicolor/128x128/apps/flipperone-osint.png'):
-    data=(p/rel).read_bytes()
-    assert data.startswith(b'\x89PNG\r\n\x1a\n'), f"invalid PNG {rel}"
-    assert struct.unpack('>II',data[16:24]) == (128,128), f"invalid icon size {rel}"
-print("PASS: Shelf Name=OSINT, desktop Name=OSINT, matching 128px PNG icon")
-PY
+# Root app.toml and supplied 14x14 RGBA alpha mask must be packaged unchanged.
+# The Flipper shelf uses this PNG's alpha channel as a one-bit shape.
+python3 "$HERE/check_shelf_icon.py" "$APP"
+
+# The old opaque 128px theme icon must not be accidentally packaged.
+if test -e "$APP/usr/share/icons/hicolor/128x128/apps/flipperone-osint.png"; then
+    echo "ERROR: stale 128px shelf icon still present" >&2
+    exit 5
+fi
 
 chmod +x "$APP/AppRun" "$APP/usr/bin/osint-ui" "$APP/usr/bin/osint-cli"
 for bin in osint-ui osint-cli; do
