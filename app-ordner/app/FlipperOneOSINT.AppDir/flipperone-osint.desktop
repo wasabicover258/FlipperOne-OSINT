@@ -1,6 +1,7 @@
 [Desktop Entry]
 Type=Application
-Name=FlipperOne-OSINT
+Name=OSINT
+Comment=OSINT research on Flipper One
 Exec=AppRun
 Icon=flipperone-osint
 Categories=Utility;Network;
