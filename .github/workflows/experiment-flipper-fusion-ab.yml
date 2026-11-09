@@ -1,0 +1,55 @@
+name: Isolated FlipperOne OSINT A-B ARM64 test
+on:
+  push:
+    branches:
+      - experiment/flipper-fusion-isolated-20261109
+    paths:
+      - IntegrationTests/FlipperFusion-Independent-20261109/**
+      - .github/workflows/experiment-flipper-fusion-ab.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ab-build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Prepare native ARM64 toolchain
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = aarch64
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libsdl2-dev file
+          curl -fsSL -o /tmp/flipper-ab-appimagetool.AppImage https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-aarch64.AppImage
+          chmod +x /tmp/flipper-ab-appimagetool.AppImage
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Build unmodified control and fusion in identical environment
+        env:
+          APPIMAGETOOL: /tmp/flipper-ab-appimagetool.AppImage
+        run: |
+          set -euo pipefail
+          export BUILD_STAMP="ci-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          bash IntegrationTests/FlipperFusion-Independent-20261109/build_arm64.sh
+      - name: Verify fresh A/B outputs
+        run: |
+          set -euo pipefail
+          cd IntegrationTests/FlipperFusion-Independent-20261109/artifacts
+          ls -lh *.AppImage
+          sha256sum -c *.sha256
+          test "$(find . -maxdepth 1 -type f -name '*.AppImage' | wc -l)" -eq 2
+          for a in *.AppImage; do
+            readelf -h "$a" | grep -q AArch64
+          done
+      - name: Upload independently installable test images
+        uses: actions/upload-artifact@v4
+        with:
+          name: flipper-fusion-ab-images
+          path: IntegrationTests/FlipperFusion-Independent-20261109/artifacts/*
+          if-no-files-found: error
