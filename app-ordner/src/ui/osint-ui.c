@@ -169,43 +169,63 @@ typedef struct {
 } Mode;
 
 static const Mode modes[] = {
-    /* One clear starting point: choose the information you already know.
-     * Combined modes reuse the existing system checks and authorized adapters.
-     * Person checks never run silently; MF_ACTIVE requires an explicit decision. */
+    /* Start by selecting the one known identifier, not the tool. */
     {"Phone number", "combo-phone", "Phone number", "e.g. +49 171 1234567",
-     "Number checks + available modules", "in one sourced result view.", MF_ACTIVE},
+     "Offline number + authorized tools", "in one result view.", MF_ACTIVE},
     {"Email address", "combo-email", "Email address", "e.g. name@example.com",
-     "Mail security + configured tools", "in one sourced result view.", MF_ACTIVE},
-    {"Username", "combo-username", "Username", "e.g. maxmuster",
-     "Public account checks + enabled", "modules in one result view.", MF_ACTIVE},
+     "Mail security + authorized tools.", "Sources stay attributed.", MF_ACTIVE},
+    {"Username", "combo-username", "Username", "e.g. examplehandle",
+     "Public handle checks + available", "modules in one result view.", MF_ACTIVE},
     {"Full name", "person-name", "Full name", "e.g. Donald Trump",
-     "Fast public-source name search.", "No case setup or API key needed.", 0},
-    {"Domain / recon", "domain", "Domain", "e.g. example.com",
-     "DNS, subdomains, IPs, services", "and related infrastructure graph.", 0},
-    {"IP address", "ip", "IP address", "e.g. 8.8.8.8",
-     "rDNS, ASN, ports, service banners", "and documented vulnerabilities.", 0},
+     "Public Wikidata, Wikipedia, GitHub", "profile candidates with sources.", 0},
+    {"IPv4 address", "ipv4", "IPv4 address", "e.g. 8.8.8.8",
+     "Network, ASN, public services", "and infrastructure clues.", 0},
+    {"IPv6 address", "ipv6", "IPv6 address", "e.g. 2606:4700:4700::1111",
+     "IPv6 network, ASN and", "public infrastructure clues.", 0},
+    {"Domain / URL", "website", "Domain, subdomain or URL", "e.g. https://example.com",
+     "DNS, TLS, hosts and related", "public infrastructure in one scan.", 0},
+    {"GPS coordinates", "gps", "Latitude, longitude", "e.g. 48.137, 11.575",
+     "OSM reverse geocoding and map", "links. No resident lookup.", 0},
+    {"Street address", "address", "Place / address", "e.g. Berlin Alexanderplatz",
+     "Public OSM map features and", "coordinates. No occupants.", 0},
+    {"Company name", "company", "Company name", "e.g. Siemens",
+     "Wikidata + OSM; official site", "and bounded DNS links.", 0},
+    {"Organization", "organization", "Organization", "e.g. Wikimedia Foundation",
+     "Open organizational facts,", "websites and entity links.", 0},
+    {"Registry number", "registry", "Registration identifier", "e.g. HRB 12345",
+     "Registry reference and legal", "lookup portals. No fake matches.", 0},
+    {"Vehicle plate", "plate", "Vehicle registration plate", "e.g. B-AB 1234",
+     "Format only. No owner lookup.", "Select relevant jurisdiction.", 0},
+    {"VIN", "vin", "Vehicle identification no.", "17 letters and digits",
+     "VIN check + NHTSA public", "vehicle specifications.", 0},
+    {"Crypto wallet", "wallet", "Public wallet address", "e.g. 0x123...",
+     "Chain format and public explorer.", "No owner identity claims.", 0},
+    {"AS number", "asn", "Autonomous system", "e.g. AS15169",
+     "RIPEstat holder and announced", "network prefixes.", 0},
 
-    {"Active checks setup", "pi-case", "Research purpose", "why are you researching?",
-     "Required only for active checks", "that contact third-party services.", 0},
+    /* Extra controls and old standalone tools remain available. */
     {"Tools / setup", "pi-status", "Modules", "",
-     "Check tools and missing runtime.", "Install Python from App Catalogue.", MF_NOINPUT},
-
-    /* Keep every original system-only workflow available without Python. */
+     "Configured modules and missing", "runtime/API prerequisites.", MF_NOINPUT},
+    {"Active check setup", "pi-case", "Research purpose", "describe authorized scope",
+     "Required for checks that contact", "account providers.", 0},
     {"Offline: phone", "phone", "Phone number", "e.g. +49 171 1234567",
-     "Original offline number checks.", "Works without PersonIntel or Python.", 0},
+     "Original phone format checks.", "No Python required.", 0},
     {"System: email", "email", "Email address", "e.g. name@example.com",
-     "Original mail security checks.", "Works without PersonIntel or Python.", 0},
-    {"Public: username", "username", "Username", "e.g. maxmuster",
-     "Original public handle checker.", "Works without PersonIntel or Python.", 0},
-
-    {"Vendor: name", "vendor-name", "Full name", "e.g. Erika Beispiel",
+     "Original email and DNS checks.", "No Python required.", 0},
+    {"Public: username", "username", "Username", "e.g. examplehandle",
+     "Original 70-site handle lookup.", "No Python required.", 0},
+    {"Domain: original", "domain", "Domain", "e.g. example.com",
+     "Original domain reconnaissance.", "Preserved for compatibility.", 0},
+    {"IP: original", "ip", "IP address", "e.g. 8.8.8.8",
+     "Original IP reconnaissance.", "Preserved for compatibility.", 0},
+    {"Vendor: name", "vendor-name", "Full name", "e.g. Example Person",
      "Optional licensed name provider.", "Needs case authorization and key.", MF_ACTIVE},
     {"Import report", "person-report", "Report file", "/home/user/Files/report.txt",
      "Import an existing local report.", "Uses the configured PersonIntel bridge.", 0},
     {"Links & hints", "pi-graph", "Links", "",
-     "Review evidence and suggested links.", "No unverified automatic linking.", MF_NOINPUT},
+     "Review evidenced relations.", "No unverified automatic linking.", MF_NOINPUT},
     {"Report", "pi-report", "Report", "",
-     "Sources, evidence levels and limits", "in one shared case report.", MF_NOINPUT},
+     "Sources, evidence and limits", "in one case report.", MF_NOINPUT},
 };
 #define NMODES ((int)(sizeof modes / sizeof modes[0]))
 
@@ -1302,8 +1322,8 @@ static void t_reset(void) {
 static void t_menu(void) {
     t_reset();
     T_CHECK(NMODES >= 14, "expected at least 14 modes, got %d", NMODES);
-    /* Six single-entry starting types are first; original system modes remain available. */
-    const char *first6[] = {"combo-phone", "combo-email", "combo-username", "person-name", "domain", "ip"};
+    /* First six are input identifiers; legacy workflows remain available below. */
+    const char *first6[] = {"combo-phone", "combo-email", "combo-username", "person-name", "ipv4", "ipv6"};
     for (int i = 0; i < 6; i++)
         T_CHECK(strcmp(modes[i].cmd, first6[i]) == 0, "mode %d is %s, expected %s", i, modes[i].cmd, first6[i]);
     int found_phone = 0, found_email = 0, found_username = 0;
