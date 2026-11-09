@@ -316,6 +316,33 @@ static void outline(int x, int y, int w, int h) {
     rect(x + w - 1, y + 1, 1, h - 2, C_INK);
 }
 
+/*
+ * OSINT 2.0.3 - compact button system for 256x144.
+ *
+ * Every clickable row has a white body and a crisp 1px black round border;
+ * focus inverts both body and text.  No new color is created here: all
+ * rendering uses the single grayscale display_palette.h.
+ *
+ * Keep a one/two-pixel blank row between cards to preserve legibility once
+ * the Flipper compositor re-colors the monochrome image.
+ */
+static void rounded_border(int x, int y, int w, int h, Color c) {
+    if (w < 5 || h < 5) return;
+    rect(x + 2, y, w - 4, 1, c);
+    rect(x + 1, y + 1, 1, 1, c);
+    rect(x + w - 2, y + 1, 1, 1, c);
+    rect(x, y + 2, 1, h - 4, c);
+    rect(x + w - 1, y + 2, 1, h - 4, c);
+    rect(x + 1, y + h - 2, 1, 1, c);
+    rect(x + w - 2, y + h - 2, 1, 1, c);
+    rect(x + 2, y + h - 1, w - 4, 1, c);
+}
+static void button_card(int x, int y, int w, int h, int selected) {
+    if (w < 5 || h < 5) return;
+    pill(x, y, w, h, selected ? C_INK : C_LIGHT);
+    if (!selected) rounded_border(x, y, w, h, C_INK);
+}
+
 static void put_char(int x, int y, char c, Color col) {
     if (c < 32 || c > 126) c = '?';
     int idx = c - 32;
@@ -347,6 +374,7 @@ static void title(const char *right) {
     text_bold(17, 3, "OSINT", C_INK);
     int rl = (int)strlen(right);
     text_px(W - 6 - rl * CW, 3, right, C_SOFT);
+    rect(4, 13, W - 8, 1, C_INK); /* thin divider above card lists */
 }
 
 /* The 5 Flipper buttons below the screen = 5 tab slots (Z X C V B).
@@ -355,10 +383,9 @@ static void title(const char *right) {
 static void tab(int slot, const char *s, int primary) {
     if (!s || !*s) return;
     int x = 2 + slot * SLOTW, w = SLOTW - 4, y = H - TABH;
-    pill(x, y, w, TABH + 6, primary ? C_INK : C_PILL); /* bottom part is clipped */
-    if (!primary) outline(x, y, w, TABH); /* black boundary on white */
+    button_card(x, y, w, TABH - 1, primary);
     int tw = (int)strlen(s) * CW;
-    text_px(x + (w - tw) / 2, y + 3, s, primary ? C_LIGHT : C_INK);
+    text_px(x + (w - tw) / 2, y + 2, s, primary ? C_LIGHT : C_INK);
 }
 
 static void softkeys(const char *z, const char *x, const char *v, const char *b) {
@@ -987,12 +1014,14 @@ static void draw_menu(void) {
         if (i >= NMODES) break;
         int y = MENU_Y0 + r * MENU_P;
         int on = (i == sel);
-        pill(6, y, W - 14, MENU_H, on ? C_INK : C_PILL);
-        text_px(13, y + 3, modes[i].label, on ? C_LIGHT : C_INK);
-        /* mark what contacts third parties, so it is visible before opening */
+        button_card(6, y, W - 15, MENU_H, on);
+        /* A narrow side indicator and a permanent chevron make rows
+         * recognizable as buttons, including when not selected. */
+        rect(11, y + 5, 2, 3, on ? C_LIGHT : C_INK);
+        text_px(17, y + 3, modes[i].label, on ? C_LIGHT : C_INK);
         if (modes[i].flags & MF_ACTIVE)
-            text_px(W - 30, y + 3, "!", on ? C_LIGHT : C_RED);
-        if (on) text_px(W - 21, y + 3, ">", C_LIGHT);
+            text_px(W - 37, y + 3, "!", on ? C_LIGHT : C_INK);
+        text_px(W - 22, y + 3, ">", on ? C_LIGHT : C_INK);
     }
     if (NMODES > MENU_VIS) {
         int track = MENU_VIS * MENU_P;
@@ -1000,7 +1029,7 @@ static void draw_menu(void) {
         if (th < 6) th = 6;
         int mx = NMODES - MENU_VIS;
         int ty = MENU_Y0 + (track - th) * menu_view / (mx > 0 ? mx : 1);
-        rect(W - 4, MENU_Y0, 1, track, C_FIELD);
+        rect(W - 4, MENU_Y0, 1, track, C_SOFT);
         rect(W - 5, ty, 3, th, C_INK);
     }
     text_px(8, 111, modes[sel].d1, C_SOFT);
@@ -1054,8 +1083,7 @@ static void draw_osk(void) {
             int focus = (r == kb_r && i == kb_c);
             int flash = (r == flash_row && i == flash_col && SDL_GetTicks() < flash_until);
             int dark = focus || flash || (k->kind == K_SHIFT && shift_on);
-            pill(k->x, y, k->w, 16, dark ? C_INK : C_PILL);
-            if (!dark) outline(k->x, y, k->w, 16);
+            button_card(k->x, y, k->w, 16, dark);
             const char *lab;
             char one[2] = {k->ch, 0};
             if (k->kind == K_CHAR && shift_on && k->ch >= 'a' && k->ch <= 'z') one[0] = (char)(k->ch - 32);
@@ -1076,7 +1104,7 @@ static void draw_input(void) {
     const Mode *m = &modes[mode_idx];
     title(m->prompt);
     pill(6, 17, W - 12, 17, C_FIELD);
-    outline(6, 17, W - 12, 17);
+    rounded_border(6, 17, W - 12, 17, C_INK);
     const char *in = inputs[mode_idx];
     int l = (int)strlen(in);
     int vis = (W - 28) / CW;
@@ -1280,6 +1308,19 @@ static void t_reset(void) {
 static int palette_is_gray(Color c) {
     return c.r == c.g && c.g == c.b;
 }
+static void t_button_geometry(void) {
+    /* All card rows must end before the footer, leave a light gap and
+     * remain reachable using their original keyboard/touch navigation. */
+    T_CHECK(MENU_P - MENU_H >= 2, "menu cards need visible spacing");
+    T_CHECK(MENU_Y0 + (MENU_VIS - 1) * MENU_P + MENU_H <= 108,
+            "menu cards collide with description text");
+    T_CHECK(CAT_VISIBLE * CAT_ROW_H <= H - TABH - 17,
+            "category list overlaps bottom softkey buttons");
+    T_CHECK(CAT_ROW_H > 11, "category cards need readable height and spacing");
+    T_CHECK(C_BG.r == 255 && C_BG.g == 255 && C_BG.b == 255,
+            "main background must be pure white");
+}
+
 static void t_monochrome_palette(void) {
     Color colors[] = {
         C_BG, C_INK, C_LIGHT, C_PILL, C_FIELD, C_SOFT,
@@ -1564,6 +1605,7 @@ static void t_ai_highlights(void) {
 }
 static int selftest(void) {
     t_monochrome_palette();
+    t_button_geometry();
     t_menu();
     t_large_output();
     t_instant_search();
