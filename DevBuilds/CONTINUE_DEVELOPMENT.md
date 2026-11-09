@@ -1,97 +1,93 @@
-# PersonIntel – Stand der Entwicklung
+# FlipperOne-OSINT + PersonIntel – Stand der Entwicklung
 
-Letzte Aktualisierung: 2026-11-09. Der am 08.11. gesicherte Zwischenstand ist inzwischen
-**fertiggestellt**. Diese Datei beschreibt den aktuellen Stand, was belegt ist, was nicht, und
-woran weitergearbeitet werden kann.
+Letzte Aktualisierung: 2026-11-09. Diese Datei ist der Wiedereinstiegspunkt: Stand, Belege,
+offene Punkte und die nächsten Schritte. Sie ersetzt den Stand vom 08.11. (reines PersonIntel).
 
 | | |
 |---|---|
 | Repo | `wasabicover258/FlipperOne-OSINT` |
-| Branch | `dev/personintel-wip` (`main` und alle vorhandenen AppImages unverändert) |
-| Projektordner | `PersonIntel/` |
-| Umfang | ~7.800 Zeilen Code, 170 Tests, alle grün |
-| Einstieg | `cd PersonIntel && pip install -e '.[dev,ui]' && python -m pytest -q` |
+| Branch | `fusion/flipper-personintel` – `main` ist unverändert |
+| Letzter Build | `DevBuilds/FlipperOne-OSINT-1.4.1-aarch64.AppImage` (3.078.664 Bytes) |
+| SHA-256 | `d0dc477c72c08e3ef4c085acb7e63fc0dbe1c95da65944843fba36a1325f98d5` |
+| Build-Commit | `4efb6d4` (Workflow-Lauf 42610680908, erfolgreich) |
+| Tests | 195 Python, 15 Go, 168 Selbstprüfungen der Oberfläche – gezählt, nicht geschätzt |
+| Workflow | `.github/workflows/build-appimage-fusion.yml` (nur `fusion/**`, schreibt nie nach `main`) |
 
-Hinweis zum Ablageort: PersonIntel ist ein **eigenes Projekt** (Linux-Desktop, Python/PySide6) und
-liegt nur deshalb hier, weil dies das einzige angebundene Repository mit `DevBuilds/` war. Die
-README von FlipperOne-OSINT schließt personenbezogene Dienste für die Flipper-App ausdrücklich
-aus. Für ein eigenes Repository genügt es, den Ordner `PersonIntel/` zu verschieben.
+Alle 16 älteren AppImages sind unverändert. `Public Releases/` wurde nicht angefasst.
 
-## Fertig und geprüft
+## Was die Fusion ist
 
-* **Kern:** Modelle mit versioniertem Ergebnisformat, strikte Eingabevalidierung (genau eine
-  Kennung, E.164), Einstellungen, Engine-Fassade, Jobverwaltung, Plugin-Registry.
-* **Recherchekontrolle:** dokumentierter, befristeter Zweck pro Fall; HMAC-signierte
-  Autorisierungen; Trennung passiv/aktiv mit Pflichtbestätigung je aktiver Abfrage; Fallumfang,
-  Tagesbudget, Mindestabstand; hash-verkettetes Protokoll ohne Kennungen im Klartext.
-* **Speicher:** SQLite mit Migrationen, nachträgliche Verschlüsselung, gezieltes Löschen,
-  verschlüsselter Zugangsdatenspeicher (oder System-Schlüsselbund, oder Umgebungsvariablen).
-* **Alle zehn Adapter** mit der geforderten Schnittstelle, transparentem Status und konkreten
-  Voraussetzungen. ShadowDragon und Babel Street melden „nicht verfügbar (Anbieterzugang)“ –
-  ohne erfundene Endpunkte oder Ergebnisse.
-* **Graph, Berichte** (Markdown/HTML/JSON/PDF), **JSON-Austauschformat** mit Versionsprüfung und
-  ID-Neuvergabe, **CLI** (headless), **PySide6-Oberfläche** mit acht Seiten.
-* **AppImage:** Rezept und Buildskript nach den im Quellcode von python-appimage belegten
-  Konventionen; Architekturabbruch und Überschreibverbot getestet.
-* **Dokumentation:** `PersonIntel/README.md`, `docs/INSTALL.md`, `docs/ARCHITECTURE.md`,
-  `docs/FUSION.md`. Ein Test prüft die Dokumentation gegen den Code (API-Namen,
-  Aufzählungswerte, Austauschformat, Installationsbefehle).
+Eine App: die bestehende leichte SDL2-Oberfläche (256×144, Flipper-Tasten Z X C V B) mit
+statischem Go-Backend, dazu PersonIntel als reines Python-Paket im Bundle unter
+`usr/lib/personintel` (540 KB). Die Oberfläche spricht über eine kurzlebige NDJSON-Brücke mit
+dem Python-Teil; PySide6 ist bewusst nicht dabei (≈250 MB, für das Display sinnlos).
 
-Belegt durch: 170 Tests, ein Ende-zu-Ende-Durchlauf im installierten Paket (Zweckverweigerung,
-Abfrage gegen Werkzeug-Attrappe, Prüfvermerk, Graphregel, Bericht, Export/Import,
-Protokollintegrität) sowie Installation in eine frische Umgebung mit beiden Startbefehlen.
+`cryptography` und `phonenumbers` liegen absichtlich **nicht** im Bundle (keine
+interpreterunabhängigen Wheels bzw. 24 MB Metadaten). Beide werden erst bei Bedarf importiert;
+fehlen sie, meldet das Modul die Voraussetzung, statt zu scheitern.
 
-## Nicht belegt (fehlende Voraussetzungen, nicht fehlende Umsetzung)
+## Belegt
 
-1. **Lauf gegen die echten Werkzeuge.** holehe, mosint, sherlock, phoneinfoga und ignorant waren
-   nicht installiert. Getestet wurde gegen ausführbare Attrappen mit den dokumentierten
-   Ausgabeformaten. Besonders zu prüfen: das JSON-Schema von Mosint und die Textausgabe der
-   PhoneInfoga-CLI – beide sind nicht formal spezifiziert.
-2. **Echte Abfragen bei Pipl und Spokeo** (Vertrag, kostenpflichtig). Getestet gegen einen lokalen
-   HTTP-Server mit dem dokumentierten Antwortformat.
-3. **Der AppImage-Bau selbst.** Er lädt ein Python-Basisimage über die GitHub-Release-API; dieser
-   Zugriff war in der Entwicklungsumgebung gesperrt (HTTP 403). Geprüft sind Rezept, Platzhalter,
-   Architekturabbruch und Überschreibverbot – nicht der Bau.
-4. **Mr.Holmes-Berichte echter Installationen**: der Import ist gegen die Textstruktur geprüft,
-   nicht gegen alle Berichtsvarianten.
+* 195 Python-, 15 Go-Tests und 168 Selbstprüfungen der Oberfläche, alle grün.
+* Der Abschlusstest im Workflow prüft drei Umgebungen: ohne `cryptography`/`phonenumbers`,
+  ohne jeden Python-Interpreter (`PATH=/nonexistent`) und mit vollständiger Umgebung. Geprüft
+  werden Modulstatus, Zweck-Sperre, Verweigerung ohne Bestätigung, Lauf mit Bestätigung sowie
+  Beleggrad und Version im Ergebnis.
+* Der Build läuft auf `ubuntu-24.04-arm`; ein Bau für die falsche Architektur ist unmöglich
+  (`platform.machine()` bestimmt den Namen).
+* Address- und UB-Sanitizer über die Oberfläche (Selbsttest und alle sieben gerenderten
+  Bildschirme): ohne Befund.
+
+## Nachgewiesen im Flipper-One-Emulator (2026-11-09)
+
+Zugang: Flipper OS auf `127.0.0.1:8930`, File Manager auf `127.0.0.1:8898`, beides über den
+Browser des Nutzers. Tastendrücke gehen per `POST /input`, Bilder kommen über `GET /stream`
+(8-Byte-Kopf x,y,w,h + w*h Graustufenbytes; Nullfläche = Keepalive).
+
+| Beobachtung | Ergebnis |
+|---|---|
+| 1.4.1 installiert, Datei im Gast zurückgelesen | SHA-256 stimmt mit dem Build überein |
+| **OSINT 1.3.0 starten** | **läuft** – Menü sichtbar, 23 Bildaktualisierungen |
+| **Native Hello starten** | **läuft** – Tastendrücke erhöhen den Zähler nachweislich |
+| **OSINT 1.4.1 starten** | **startet nicht** – kein einziges Bild, auch nach 3 Minuten; 3 Versuche |
+| Python 3 im Gast | **nicht vorhanden** – „Python Runtime" (30 MB) steht im Katalog als *nicht installiert* |
+
+Ausgeschlossen als Ursache für den Fehlstart: Bibliotheksabhängigkeiten und glibc-Versionen
+(identisch zu 1.3.0), Symbolversionen, Kompression, Blockgröße und Struktur des Abbilds,
+Dateirechte, Speicherfehler im C-Code, Compiler- und Linkerflags (beide Workflows identisch),
+sowie Geduld (Software-Emulation ist langsam, das erklärt es nicht).
+
+**Wichtige Lehre:** eigene Umpackversuche (`1.4.2-diag`, `1.4.3-diag2`, `1.3.0-diag3`) sind als
+Diagnosemittel unbrauchbar. Auch die *unveränderte* 1.3.0, mit demselben Verfahren neu gepackt,
+startet nicht – das Umpacken selbst ist die Ursache, vermutlich das Längen-/Offsetfeld im
+AppImage-Runtime. Nur über `appimagetool` im Workflow gebaute Bundles sind aussagekräftig.
+
+## Offen
+
+1. **Fehlstart von 1.4.1** – die Ursache steht im Startprotokoll der App, das im Gast unter
+   `/tmp/flipperone-osint.log` liegt und von außen nicht lesbar ist. Deshalb kopiert AppImage
+   `1.4.4-diag` dieses Protokoll bei einem Fehlstart nach `/home/user/Files`, wo der File
+   Manager es anzeigt. Bei erfolgreichem Start wird dort nichts abgelegt.
+2. **Testbericht** `DevBuilds/EMULATOR_TEST_1.4.1.md` (30 Schritte) ist noch nicht abgearbeitet,
+   weil die App nicht startet. Die Schritte 1–4 (Bestand, Navigation) sind über 1.3.0 belegt.
+3. **PersonIntel-Brücke auf dem Gerät** kann ohne Python nicht starten. Zu klären ist, ob die
+   „Python Runtime" aus dem Katalog `python3` so bereitstellt, dass die Brücke sie findet.
 
 ## Nächste Schritte
 
-1. Auf einem Rechner mit den echten Werkzeugen: `personintel-cli status`, dann je Modul eine
-   Abfrage gegen eine eigene Kennung. Abweichungen im Ausgabeformat im jeweiligen Adapter
-   (`src/personintel/adapters/<modul>.py`, Methode `normalize_results`) anpassen.
-2. AppImage bauen: `pip install python-appimage && apt-get install -y file`, dann
-   `PersonIntel/packaging/build_appimage.sh`. Ergebnis landet unter neuem Versionsnamen in
-   `DevBuilds/`; bestehende Dateien werden nie überschrieben. ARM64 nur auf ARM64-Hardware oder
-   per `docker run --platform linux/arm64` (Befehl steht in `docs/INSTALL.md`).
-3. Vor einer Veröffentlichung: Version in `src/personintel/__init__.py` erhöhen.
-4. Bei vorliegender Anbieterdokumentation ShadowDragon/Babel Street vervollständigen – nötig sind
-   nur `execute_authorized_query` und `normalize_results`; Anleitung in `docs/ARCHITECTURE.md`
-   unter „Neuen Anbieter anbinden“.
-5. Für die Verschmelzung mit der bestehenden System-OSINT-Anwendung: `docs/FUSION.md`
-   (Paket-API `personintel.api`, Austauschformat `personintel.case` 1.0, Entry-Points
-   `personintel.adapters` / `personintel.ui_pages`, Einbettung einzelner Oberflächenseiten).
+1. `1.4.4-diag` im Emulator installieren, starten, `/home/user/Files/flipperone-osint-start.log`
+   über den File Manager lesen. Dort steht die echte Fehlermeldung samt Exit-Code und – als
+   direkter Beleg für Punkt 3 – ob `python3` im Gast gefunden wird.
+2. Den nachgewiesenen Fehler beheben, Version in `app-ordner/VERSION` erhöhen, bauen lassen.
+   Der Workflow bricht ab, wenn die Zieldatei schon existiert; alte Dateien bleiben dadurch
+   unberührt.
+3. `EMULATOR_TEST_1.4.1.md` mit den tatsächlichen Ergebnissen füllen, danach `FUSION_1.4.1.md`.
+4. AppRun vor dem Abschluss prüfen: es ersetzt sich für die Diagnose nicht mehr per `exec`
+   durch `osint-ui`. Falls das bleibt, ist es bewusst zu dokumentieren.
 
-## Flipper-One-Emulator-Tests
+## Arbeitsregeln für diesen Zweig
 
-Hierzu gibt es **keinen Stand**: in diesen Sitzungen wurden keine Emulator-Tests ausgeführt, und
-es liegen keine Ergebnisse oder Logs vor. Das Repository `wasabicover258/Flipper-Emulator` war
-nicht angebunden und wurde nicht gelesen. Die vorhandenen FlipperOne-OSINT-AppImages (aarch64,
-0.1.1 … 1.3.0) sind unverändert.
-
-Vorschlag für die nächsten Testschritte – bewusst noch nicht durchgeführt:
-
-1. In `Flipper-Emulator` nachsehen, welche Tests und Ergebnisse es für FlipperOne-OSINT 1.3.0 gibt.
-2. Klären, ob PersonIntel überhaupt auf Flipper One laufen soll. PySide6/Qt ist für das kleine
-   Display und ein ARM64-AppImage schwergewichtig; die Flipper-App ist bewusst Go + SDL2. Für den
-   Flipper wäre eher die CLI (`personintel-cli`) oder eine eigene schlanke Oberfläche sinnvoll,
-   die über `personintel.api` arbeitet.
-3. Falls ja: ARM64-AppImage bauen (Schritt 2 oben), im Emulator starten, Startlog prüfen.
-4. Falls nein: PersonIntel nur auf dem Linux-Desktop testen (x86_64 und ARM64).
-
-## Quellen der Schnittstellenrecherche
-
-docs.pipl.com (Search API), docs.spokeo.com (v5), GitHub-READMEs von megadose/holehe,
-alpkeskin/mosint, sherlock-project/sherlock, sundowndev/phoneinfoga, megadose/ignorant,
-Lucksi/Mr.Holmes; python-appimage.readthedocs.io sowie der Quellcode von
-`python_appimage.commands.build.app` für die Rezeptkonventionen.
+* Keine Änderungen an `main`, keine vorhandene AppImage-Datei überschreiben, löschen oder
+  ersetzen. Neue Builds ausschließlich unter neuem Versionsnamen in `DevBuilds/`.
+* Keine simulierten Rechercheergebnisse als Nachweis echter Funktionalität.
+* Nach jedem abgeschlossenen Schritt ein Commit und ein Push.
