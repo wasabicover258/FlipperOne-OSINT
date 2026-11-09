@@ -185,10 +185,10 @@ static const Mode modes[] = {
      "Public IPv6 network records", "and reachable services.", 0},
     {"Website / domain", "website", "Website URL or domain", "e.g. https://example.com",
      "DNS, TLS, hosts, technologies", "and related infrastructure.", 0},
-    {"GPS coordinates", "gps", "Latitude, longitude", "e.g. 48.137, 11.575",
-     "Find public map features and", "location descriptions.", 0},
+    {"GPS coordinates", "gps", "Latitude, longitude", "e.g. 48.086056, 11.556722",
+     "Nearby clinics, restaurants", "and public business contacts.", 0},
     {"Address / place", "address", "Place or address", "e.g. Berlin Alexanderplatz",
-     "Map candidates and coordinates.", "No resident information.", 0},
+     "Nearby facilities, addresses", "and listed business contacts.", 0},
     {"Company", "company", "Company name", "e.g. Siemens",
      "Public records, website, DNS", "and organization links.", 0},
     {"Organization", "organization", "Organization name", "e.g. Wikimedia Foundation",
@@ -1489,6 +1489,33 @@ static void t_catalog_browser(void) {
     T_CHECK(screen==S_MENU && quit==0,"Z Home must not quit app");
 }
 
+/* Verify that actionable OSM POI output becomes meaningful subcategories. */
+static void t_geo_categories(void) {
+    t_reset();
+    push_result("# Nearby facilities and businesses (500m)");
+    push_result("+ Clinic: Beispiel Klinik (12m)");
+    push_result("i Source: https://www.openstreetmap.org/way/101");
+    push_result("+ Restaurant: Bistro Test (45m)");
+    push_result("+ Business phone: +49 89 123456");
+    push_result("+ Business email: info@klinik.example");
+    push_result("+ Business website: https://klinik.example");
+    push_result("+ Public DNS: klinik.example -> 192.0.2.1");
+    T_CHECK(catalog_group_count(GR_HEALTH)==1,
+            "clinic must be in healthcare group");
+    T_CHECK(catalog_group_count(GR_FOOD)==1,
+            "restaurant must be in food group");
+    T_CHECK(catalog_group_count(GR_PHONE)==1,
+            "listed business phone missing from contacts");
+    T_CHECK(catalog_group_count(GR_EMAIL)==1,
+            "listed business email missing from contacts");
+    T_CHECK(catalog_group_count(GR_ORGWEB)==1,
+            "listed business website missing from organizations");
+    T_CHECK(catalog_group_count(GR_DNS)==1,
+            "DNS pivot missing from technical results");
+    T_CHECK(catalog_category_count(CAT_PLACES)==2,
+            "clinic + restaurant should be listed under Places");
+}
+
 static int selftest(void) {
     t_menu();
     t_large_output();
@@ -1497,6 +1524,7 @@ static int selftest(void) {
     t_markers();
     t_input_editing();
     t_catalog_browser();
+    t_geo_categories();
     printf("osint-ui selftest: %d checks ok, %d failed\n", t_ok, t_fail);
     return t_fail == 0 ? 0 : 1;
 }
