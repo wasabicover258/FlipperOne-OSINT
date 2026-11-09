@@ -59,7 +59,7 @@ func TestOverpassSingleBoundedRequest(t *testing.T) {
         }
         if err:=r.ParseForm();err!=nil {t.Error(err);return}
         q:=r.Form.Get("data")
-        for _,want:=range []string{"(around:500,48.086056,11.556722)", "[healthcare]", "[amenity~", "out center 100"}{
+        for _,want:=range []string{"(around:500,48.086056,11.556722)", "[healthcare]", "[amenity~", "out center 350"}{
             if !strings.Contains(q,want){t.Errorf("missing %q in query %q",want,q)}
         }
         w.Header().Set("Content-Type","application/json")
