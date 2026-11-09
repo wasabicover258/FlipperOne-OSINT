@@ -1,0 +1,17 @@
+name: ChatGPT 2.0.3 ARM64 runner diagnostic
+on:
+  push:
+    branches:
+      - experiment/chatgpt-v2.0.3-list-buttons
+    paths:
+      - .github/workflows/experiment-chatgpt-v2.0.3-arm-smoke.yml
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Verify GitHub ARM64 runner availability
+        run: |
+          test "$(uname -m)" = "aarch64"
+          echo "ARM64 runner available"
