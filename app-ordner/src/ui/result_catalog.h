@@ -12,8 +12,8 @@
 #include <ctype.h>
 
 #define CAT_MAX_ITEMS 1600
-#define CAT_VISIBLE 9
-#define CAT_ROW_H 12
+#define CAT_VISIBLE 8
+#define CAT_ROW_H 13 /* one pixel of white space between 12px cards */
 
 enum {
     CAT_AI, CAT_PERSON, CAT_CONTACT, CAT_PROFILES, CAT_PLACES, CAT_ORGS, CAT_TECH,
@@ -287,22 +287,45 @@ static void catalog_back(void) {
     else if (run_view==RV_GROUPS) run_view=RV_OVERVIEW;
     else if (run_view==RV_OVERVIEW) screen=S_MENU;
 }
+/* One shared button treatment for categories, subgroups and findings.
+ * A real 1px outline distinguishes unselected buttons on white screens.
+ * Selection is a solid black rounded shape with white text, never orange. */
 static void catalog_row(int row,const char *label,int count,int chosen,char mark) {
-    int y = 17 + row*CAT_ROW_H;
+    int y = 17 + row * CAT_ROW_H;
+    int h = CAT_ROW_H - 1;
+    const int x = 4, w = W - 13;
+    button_card(x, y, w, h, chosen);
     Color fg = chosen ? C_LIGHT : C_INK;
-    if (chosen) pill(4,y,W-9,CAT_ROW_H-1,C_INK);
-    else if (row%2==0) pill(4,y,W-9,CAT_ROW_H-1,C_PILL);
-    if (mark=='=' || mark=='+') rect(7,y+3,3,4,chosen?C_LIGHT:C_GREEN);
-    else if (mark=='!' || mark=='?') rect(7,y+3,3,4,chosen?C_LIGHT:C_RED);
-    else rect(7,y+3,3,4,chosen?C_LIGHT:C_SOFT);
-    char shown[34];
-    snprintf(shown,sizeof shown,"%.30s",label);
-    text_px(13,y+2,shown,fg);
-    if (count>=0) {
-        char nbuf[12];
-        snprintf(nbuf,sizeof nbuf,"%d",count);
-        text_px(W-9-(int)strlen(nbuf)*CW,y+2,nbuf,chosen?C_LIGHT:C_SOFT);
-    } else text_px(W-14,y+2,">",fg);
+
+    /* Compact mark preserves evidence status without relying on color. */
+    if (mark == '!' || mark == '?') {
+        text_px(9, y + 2, "!", fg);
+    } else if (mark == '=' || mark == '+') {
+        rect(10, y + 5, 3, 3, fg);
+    } else {
+        rect(10, y + 5, 2, 2, fg);
+    }
+
+    int maxChars = 30;
+    if (count >= 0) {
+        char number[12];
+        snprintf(number, sizeof number, "%d", count);
+        int bw = (int)strlen(number) * CW + 8;
+        int bx = x + w - bw - 4;
+        /* White counter chip remains legible on the selected black card. */
+        pill(bx, y + 1, bw, 10, C_LIGHT);
+        if (!chosen) rounded_border(bx, y + 1, bw, 10, C_INK);
+        text_px(bx + 4, y + 2, number, C_INK);
+        maxChars = (bx - 19 - 3) / CW;
+    } else {
+        text_px(x + w - 15, y + 2, ">", fg);
+        maxChars = (x + w - 19 - 20) / CW;
+    }
+    if (maxChars < 1) maxChars = 1;
+    if (maxChars > 34) maxChars = 34;
+    char shown[36];
+    snprintf(shown, sizeof shown, "%.*s", maxChars, label);
+    text_px(18, y + 2, shown, fg);
 }
 static void catalog_draw_overview(void) {
     title("Categories");
