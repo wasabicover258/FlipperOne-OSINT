@@ -169,37 +169,41 @@ typedef struct {
 } Mode;
 
 static const Mode modes[] = {
-    {"Username", "username", "Username", "e.g. maxmuster",
-     "Checks the handle on 70+ public", "platforms, grouped by category.", 0},
-    {"Email address", "email", "Email address", "e.g. name@example.com",
-     "Provider, mail server and full", "SPF/DMARC/DKIM security grade.", 0},
-    {"Phone number", "phone", "Phone number", "e.g. +49 171 1234567",
-     "Country, format and line type", "(offline). No owner lookup.", 0},
+    /* One clear starting point: choose the information you already know.
+     * Combined modes reuse the existing system checks and authorized adapters.
+     * Person checks never run silently; MF_ACTIVE requires an explicit decision. */
+    {"Phone number", "combo-phone", "Phone number", "e.g. +49 171 1234567",
+     "Number checks + available modules", "in one sourced result view.", MF_ACTIVE},
+    {"Email address", "combo-email", "Email address", "e.g. name@example.com",
+     "Mail security + configured tools", "in one sourced result view.", MF_ACTIVE},
+    {"Username", "combo-username", "Username", "e.g. maxmuster",
+     "Public account checks + enabled", "modules in one result view.", MF_ACTIVE},
+    {"Full name", "person-name", "Full name", "e.g. Erika Beispiel",
+     "Authorized provider only; unverified", "links are never identity proofs.", MF_ACTIVE},
     {"Domain / recon", "domain", "Domain", "e.g. example.com",
-     "Full recon, live port/CVE tree,", "entity graph + correlations.", 0},
+     "DNS, subdomains, IPs, services", "and related infrastructure graph.", 0},
     {"IP address", "ip", "IP address", "e.g. 8.8.8.8",
-     "rDNS, ASN, RDAP, live port scan +", "banners, software and known CVEs.", 0},
+     "rDNS, ASN, ports, service banners", "and documented vulnerabilities.", 0},
 
-    {"Person modules", "pi-status", "Modules", "",
-     "Real status of all ten person", "modules and what each one needs.", MF_NOINPUT},
     {"Case & purpose", "pi-case", "Research purpose", "why are you researching?",
-     "Person queries stay blocked until", "a purpose is documented here.", 0},
+     "Document your authorized scope", "before using person modules.", 0},
+    {"Tools / setup", "pi-status", "Modules", "",
+     "Check tools and missing runtime.", "Install Python from App Catalogue.", MF_NOINPUT},
 
-    {"Person: username", "combo-username", "Username", "e.g. maxmuster",
-     "70 platforms + Sherlock and more,", "merged, with evidence levels.", MF_ACTIVE},
-    {"Person: email", "combo-email", "Email address", "e.g. name@example.com",
-     "Mail check + Holehe/Mosint/Pipl,", "merged. No leaked passwords.", MF_ACTIVE},
-    {"Person: phone", "combo-phone", "Phone number", "e.g. +49 171 1234567",
-     "Offline check + PhoneInfoga and", "Ignorant. No owner lookup.", MF_ACTIVE},
-    {"Person: name", "person-name", "Full name", "e.g. Erika Beispiel",
-     "Vendor search (Pipl) - needs a", "contract. Never an identity proof.", MF_ACTIVE},
+    /* Keep every original system-only workflow available without Python. */
+    {"Offline: phone", "phone", "Phone number", "e.g. +49 171 1234567",
+     "Original offline number checks.", "Works without PersonIntel or Python.", 0},
+    {"System: email", "email", "Email address", "e.g. name@example.com",
+     "Original mail security checks.", "Works without PersonIntel or Python.", 0},
+    {"Public: username", "username", "Username", "e.g. maxmuster",
+     "Original public handle checker.", "Works without PersonIntel or Python.", 0},
+
     {"Import report", "person-report", "Report file", "/home/user/Files/report.txt",
-     "Reads an existing Mr.Holmes report", "from the device. Passive.", 0},
-
+     "Import an existing local report.", "Uses the configured PersonIntel bridge.", 0},
     {"Links & hints", "pi-graph", "Links", "",
-     "Links taken over by hand, with", "their basis. Hints are not links.", MF_NOINPUT},
+     "Review evidence and suggested links.", "No unverified automatic linking.", MF_NOINPUT},
     {"Report", "pi-report", "Report", "",
-     "Purpose, method, findings by", "evidence level, limitations.", MF_NOINPUT},
+     "Sources, evidence levels and limits", "in one shared case report.", MF_NOINPUT},
 };
 #define NMODES ((int)(sizeof modes / sizeof modes[0]))
 
@@ -1296,10 +1300,13 @@ static void t_reset(void) {
 static void t_menu(void) {
     t_reset();
     T_CHECK(NMODES >= 14, "expected at least 14 modes, got %d", NMODES);
-    /* the five original modules must still be first, in the original order */
-    const char *first5[] = {"username", "email", "phone", "domain", "ip"};
-    for (int i = 0; i < 5; i++)
-        T_CHECK(strcmp(modes[i].cmd, first5[i]) == 0, "mode %d is %s, expected %s", i, modes[i].cmd, first5[i]);
+    /* Six single-entry starting types are first; original system modes remain available. */
+    const char *first6[] = {"combo-phone", "combo-email", "combo-username", "person-name", "domain", "ip"};
+    for (int i = 0; i < 6; i++)
+        T_CHECK(strcmp(modes[i].cmd, first6[i]) == 0, "mode %d is %s, expected %s", i, modes[i].cmd, first6[i]);
+    T_CHECK(t_mode_by_cmd("phone") >= 0, "original phone mode must remain available");
+    T_CHECK(t_mode_by_cmd("email") >= 0, "original email mode must remain available");
+    T_CHECK(t_mode_by_cmd("username") >= 0, "original username mode must remain available");
     /* every mode reachable with the d-pad, and the selection stays visible */
     for (int i = 0; i < NMODES; i++) {
         T_CHECK(sel == i, "selection %d, expected %d", sel, i);
