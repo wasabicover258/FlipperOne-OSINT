@@ -1,5 +1,5 @@
 module flipperone-osint
 
-go 1.21
+go 1.27.2
 
-require rsc.io/pdf v0.1.1
+require github.com/giraffesyo/pdf v0.8.0
