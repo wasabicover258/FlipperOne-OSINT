@@ -178,15 +178,15 @@ static const Mode modes[] = {
      "Mail security + configured tools", "in one sourced result view.", MF_ACTIVE},
     {"Username", "combo-username", "Username", "e.g. maxmuster",
      "Public account checks + enabled", "modules in one result view.", MF_ACTIVE},
-    {"Full name", "person-name", "Full name", "e.g. Erika Beispiel",
-     "Authorized provider only; unverified", "links are never identity proofs.", MF_ACTIVE},
+    {"Full name", "person-name", "Full name", "e.g. Donald Trump",
+     "Fast public-source name search.", "No case setup or API key needed.", 0},
     {"Domain / recon", "domain", "Domain", "e.g. example.com",
      "DNS, subdomains, IPs, services", "and related infrastructure graph.", 0},
     {"IP address", "ip", "IP address", "e.g. 8.8.8.8",
      "rDNS, ASN, ports, service banners", "and documented vulnerabilities.", 0},
 
-    {"Case & purpose", "pi-case", "Research purpose", "why are you researching?",
-     "Document your authorized scope", "before using person modules.", 0},
+    {"Active checks setup", "pi-case", "Research purpose", "why are you researching?",
+     "Required only for active checks", "that contact third-party services.", 0},
     {"Tools / setup", "pi-status", "Modules", "",
      "Check tools and missing runtime.", "Install Python from App Catalogue.", MF_NOINPUT},
 
@@ -198,6 +198,8 @@ static const Mode modes[] = {
     {"Public: username", "username", "Username", "e.g. maxmuster",
      "Original public handle checker.", "Works without PersonIntel or Python.", 0},
 
+    {"Vendor: name", "vendor-name", "Full name", "e.g. Erika Beispiel",
+     "Optional licensed name provider.", "Needs case authorization and key.", MF_ACTIVE},
     {"Import report", "person-report", "Report file", "/home/user/Files/report.txt",
      "Import an existing local report.", "Uses the configured PersonIntel bridge.", 0},
     {"Links & hints", "pi-graph", "Links", "",
