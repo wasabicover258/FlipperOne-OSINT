@@ -62,9 +62,8 @@ PURPOSE_TEXT = "Verifikation einer Quelle fuer einen Artikel ueber Foerdermittel
 
 def make_case(eng: Engine, *, active: bool = True, name: str = "Testfall"):
     case = eng.create_case(name)
-    eng.set_purpose(case.id, Purpose(category="journalism", description=PURPOSE_TEXT,
-                                     authorized_by="Redaktionsleitung", active_checks_allowed=active))
-    return case
+    return eng.set_purpose(case.id, Purpose(category="journalism", description=PURPOSE_TEXT,
+                                            authorized_by="Redaktionsleitung", active_checks_allowed=active))
 
 
 def confirm(value: str) -> ActiveConfirmation:
@@ -92,6 +91,10 @@ class _Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a):  # still
         pass
 
+    def _hdrs(self) -> dict:
+        """Header-Namen sind laut HTTP gross-/kleinschreibungsunabhaengig -> fuer Tests normalisieren."""
+        return {k.lower(): v for k, v in self.headers.items()}
+
     def _send(self, status: int, obj) -> None:
         body = json.dumps(obj).encode()
         self.send_response(status)
@@ -103,7 +106,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):  # Pipl: application/x-www-form-urlencoded
         n = int(self.headers.get("Content-Length") or 0)
         form = {k: v[0] for k, v in urllib.parse.parse_qs(self.rfile.read(n).decode()).items()}
-        self.server.calls.append(("POST", self.path, form, dict(self.headers)))
+        self.server.calls.append(("POST", self.path, form, self._hdrs()))
         if form.get("key") != "good-key":
             return self._send(403, {"error": "invalid key"})
         if form.get("email") == "clark.kent@example.com":
@@ -113,7 +116,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):  # Spokeo: X-api-key
         u = urllib.parse.urlparse(self.path)
         q = {k: v[0] for k, v in urllib.parse.parse_qs(u.query).items()}
-        self.server.calls.append(("GET", u.path, q, dict(self.headers)))
+        self.server.calls.append(("GET", u.path, q, self._hdrs()))
         if self.headers.get("X-api-key") != "good-key":
             return self._send(403, {"message": "forbidden"})
         if self.server.spokeo_status != 200:

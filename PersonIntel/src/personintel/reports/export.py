@@ -86,10 +86,10 @@ def build_report(engine, case_id: str, options: ReportOptions | None = None) -> 
 
     rejected = [f for f in findings if f.review_state is ReviewState.REJECTED]
     usable = [f for f in findings if f.review_state is not ReviewState.REJECTED or o.include_rejected]
+    # Fehlgeschlagene Abfragen sind keine Befunde: sie erscheinen als Hinweis, nicht in der Ergebnisliste.
+    shown = [f for f in usable if f.status is not FindingStatus.FAILED]
     if not o.include_not_found:
-        shown = [f for f in usable if f.status not in (FindingStatus.NOT_FOUND,)]
-    else:
-        shown = list(usable)
+        shown = [f for f in shown if f.status is not FindingStatus.NOT_FOUND]
     if not o.include_unconfirmed:
         shown = [f for f in shown if f.evidence is not Evidence.UNCONFIRMED]
     not_found_n = sum(1 for f in usable if f.status is FindingStatus.NOT_FOUND)
