@@ -348,8 +348,7 @@ func showNearbyPlaces(lat,lon float64,radius int,nameFilter string) int {
     query:=strings.ToLower(strings.TrimSpace(nameFilter))
     for _,p:=range places{
         if query!="" && !strings.Contains(strings.ToLower(p.Name),query) &&
-            !strings.Contains(query,strings.ToLower(p.Name)){continue}
-        }
+            !strings.Contains(query,strings.ToLower(p.Name)) {continue}
         if n>=nearbyResultLimit{break}
         n++
         // At most two distinct business websites are DNS-enriched.
