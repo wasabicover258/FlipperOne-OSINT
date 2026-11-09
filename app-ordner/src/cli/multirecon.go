@@ -8,6 +8,7 @@ import (
     "encoding/json"
     "errors"
     "fmt"
+    "io"
     "net"
     "net/http"
     "net/url"
@@ -85,9 +86,19 @@ func osmRequest(endpoint string, values url.Values, out any) error {
     u,err:=url.Parse(endpoint)
     if err!=nil{return err}
     u.RawQuery=values.Encode()
-    resp,body,err:=get(client,u.String())
+    req,err:=http.NewRequest(http.MethodGet,u.String(),nil)
     if err!=nil{return err}
-    if resp.StatusCode!=http.StatusOK {return fmt.Errorf("OpenStreetMap HTTP %d",resp.StatusCode)}
+    // Nominatim's published usage policy requires an identifiable application
+    // User-Agent rather than a generic browser string.
+    req.Header.Set("User-Agent","FlipperOne-OSINT/1.3 (https://github.com/wasabicover258/FlipperOne-OSINT; issue tracker)")
+    req.Header.Set("Accept","application/json")
+    resp,err:=client.Do(req)
+    if err!=nil{return err}
+    defer resp.Body.Close()
+    if resp.StatusCode!=http.StatusOK{return fmt.Errorf("OpenStreetMap HTTP %d",resp.StatusCode)}
+    body,err:=io.ReadAll(io.LimitReader(resp.Body,512*1024+1))
+    if err!=nil{return err}
+    if len(body)>512*1024{return errors.New("OpenStreetMap response exceeds limit")}
     return json.Unmarshal(body,out)
 }
 
