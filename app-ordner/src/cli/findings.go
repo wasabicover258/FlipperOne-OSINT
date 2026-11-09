@@ -78,6 +78,7 @@ const (
 	KindEmail   = "email"    // E-Mail-Adresse
 	KindPhone   = "phone"    // Rufnummer
 	KindOrg     = "org"      // Organisation/Betreiber
+	KindPlace   = "place"    // OSM feature identified by node/way/relation ID
 	KindPerson  = "person"   // Personendatensatz (nie automatisch bestätigt)
 	KindDoc     = "document" // Datei/Bericht
 	KindMeta    = "meta"     // Metadaten
