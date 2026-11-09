@@ -28,7 +28,7 @@ jobs:
           chmod +x /tmp/appimagetool-aarch64.AppImage
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.32'
+          go-version: '1.22'
       - name: Build ChatGPT FUSION 1.3 and run UI/Go checks
         env:
           APPIMAGETOOL: /tmp/appimagetool-aarch64.AppImage
