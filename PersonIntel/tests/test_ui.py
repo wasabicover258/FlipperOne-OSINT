@@ -10,7 +10,11 @@ import os
 import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-pytest.importorskip("PySide6", reason="PySide6 ist nicht installiert (pip install 'personintel[ui]')")
+# QtWidgets statt nur PySide6: das Paket kann installiert sein, ohne dass die Qt-Bibliotheken
+# des Systems vorhanden sind (z. B. libEGL auf schlanken CI-Abbildern). Dann wird uebersprungen
+# statt beim Einsammeln der Tests abzubrechen.
+pytest.importorskip("PySide6.QtWidgets",
+                    reason="PySide6 fehlt oder die Qt-Systembibliotheken sind nicht vorhanden")
 
 from PySide6.QtCore import Qt                                   # noqa: E402
 from PySide6.QtWidgets import QApplication, QDialog             # noqa: E402

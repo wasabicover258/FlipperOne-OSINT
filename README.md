@@ -4,9 +4,11 @@ A technical OSINT / reconnaissance application for the Flipper One OS (AppImage,
 Give it a domain, an IP address, an email address or a public handle and it maps the
 **infrastructure and public footprint** of that target.
 
-This is an infrastructure-recon tool. It investigates domains, hosts, networks and
-deliberately-public accounts. It does **not** do people search, owner lookup for a
-phone number, or automated profiling of a private individual.
+Since 1.4.0 it also does **person research**, through the bundled
+[PersonIntel](PersonIntel/) module: with a documented purpose, a separate confirmation for
+every check that contacts third parties, and an evidence level on every finding. It still
+does **not** do owner lookup for a phone number and does not assemble a profile of a
+private individual on its own — see [Person research](#person-research-since-140).
 
 ## Modules
 
@@ -75,16 +77,79 @@ It then draws a text **entity graph**: `domain -> operator/ASN -> IP -> hosts`.
 This brings the module/workspace/graph structure of SpiderFoot, Recon-ng and
 Maltego to the app, applied to systems.
 
-### What is deliberately left out
+## Person research (since 1.4.0)
 
-This is an infrastructure-recon tool. The person-focused OSINT tools from the same
-Kali toolbox — Holehe and Mosint (email to a person's accounts and breaches),
-Sherlock used as an automatic pivot, PhoneInfoga owner lookup, Ignorant, Mr.Holmes —
-and commercial people-search / identity-linking platforms such as Pipl, Spokeo,
-ShadowDragon and Babel Street — are intentionally **not** emulated. The tool borrows
-the *framework structure* of SpiderFoot, Recon-ng and Maltego (modules, correlation,
-an entity graph) but applies it to **systems, not people**: it does not take one
-fragment about a person and assemble a profile of them.
+Up to 1.3.0 this was an infrastructure-only tool and person-focused OSINT was
+deliberately left out. Since 1.4.0 the app also carries **person research**, but not as
+a free-for-all: it runs through [PersonIntel](PersonIntel/), which enforces a documented
+purpose, separates passive from active checks and attaches an evidence level to every
+finding. The infrastructure modules are unchanged and keep working on their own.
+
+| Person module | Input | Check | Needs |
+|---|---|---|---|
+| Holehe | email | active | `pipx install holehe` |
+| Mosint | email | active | `mosint` + its own config file |
+| Sherlock | username | active | `pipx install sherlock-project` |
+| PhoneInfoga | phone | passive | `phoneinfoga` binary |
+| Ignorant | phone | active | `pipx install ignorant` |
+| Mr.Holmes | report file | passive | an existing report (import only) |
+| Pipl | email, phone, username, name | active | vendor contract + API key |
+| Spokeo | email, phone (US), username | active | vendor contract + API key |
+| ShadowDragon | — | — | **not available**: no public API documentation |
+| Babel Street | — | — | **not available**: the documented API is text analytics, not people search |
+
+Nothing is simulated. A module that is not installed, not configured or not released by
+its vendor says so on the **Person modules** screen, names the exact prerequisite, and is
+skipped during a query — the other modules still run.
+
+### What the app refuses to do
+
+- **No query without a documented purpose.** `Case & purpose` asks why you are
+  researching; without a valid purpose every person query is blocked.
+- **No silent third-party contact.** An active check shows a confirmation screen with the
+  identifier and two statements to tick. Only then does the backend receive the word
+  `confirm`; without it PersonIntel refuses the query.
+- **No mass lookups.** One identifier per query, at most ten per case, a daily budget and a
+  minimum interval between active checks.
+- **No identity claims.** A hit is a lead. `=` proven, `~` indication, `?` unconfirmed —
+  and `=` is only ever set by a person reviewing a finding, never by a module. The same
+  handle on two platforms is a hint, not a link.
+- **No leaked credentials.** Breach sections are reduced to source name and date; passwords
+  and hashes are discarded.
+- **No circumvention.** Rate limits end a query instead of being worked around.
+
+### Shared result model
+
+Infrastructure and person findings land in one store. A finding that several sources
+report becomes one entry with several sources (an account is identified by its profile
+URL, so the same handle on two platforms stays two accounts). Links carry the evidence
+level of their weakest end, and derived identifiers are only ever listed as *possible
+follow-up queries* — nothing is queried automatically, and the case scope limits how many
+identifiers a case may hold.
+
+The combined modes (`Person: username`, `Person: email`, `Person: phone`) run the
+infrastructure module and the person modules in one pass so the merge can happen.
+
+### How it is wired
+
+PersonIntel is Python; this app is C/SDL2 plus a static Go binary. Instead of shipping a
+Qt interface (~250 MB, software-rendered on the device), the bundle carries PersonIntel as
+540 KB of pure Python and talks to it over a line-based JSON protocol on stdin/stdout. The
+process is started only when a person module is used and ends with the query — no service
+stays behind. If the device has no Python 3.10+, the person modules say so and everything
+else keeps working.
+
+Because the bundle is pure Python, it has no `cryptography`: on the device there is no
+at-rest encryption and no encrypted credential store, and vendor keys are passed as
+`PERSONINTEL_<MODULE>_<FIELD>` environment variables. On a desktop install
+(`pip install personintel`) both are available.
+
+### What is still deliberately left out
+
+The app borrows the *framework structure* of SpiderFoot, Recon-ng and Maltego (modules,
+correlation, an entity graph). It does not assemble a profile from fragments: it does not
+link identities on its own, does not rank people, and does not store raw vendor payloads.
+Addresses, dates of birth and relatives are dropped from vendor records.
 
 ## Results view
 
@@ -99,12 +164,15 @@ whole result set available but tidy and navigable on the small screen.
 
 The five buttons below the screen reach the app as the keys `Z X C V B`.
 
-| Button | Menu | Input screen | Results |
-|--------|------|--------------|---------|
-| ✕ (Z) | Exit | Cursor left | Exit |
-| ☰ (X) | - | Cursor right | Jump to top |
-| [ ] (V) | - | Back to the menu | Refresh / Stop |
-| ✓ (B) | Open | Start | New search |
+| Button | Menu | Input screen | Confirmation | Results |
+|--------|------|--------------|--------------|---------|
+| ✕ (Z) | Exit | Cursor left | Tick statement 1 | Exit |
+| ☰ (X) | - | Cursor right | Tick statement 2 | Jump to top |
+| [ ] (V) | - | Back to the menu | Cancel | Refresh / Stop |
+| ✓ (B) | Open | Start | Start (both ticked) | New search |
+
+The menu scrolls: the d-pad reaches all entries, and `!` marks a mode that contacts third
+parties. Modes without an input field (module status, links, report) start straight away.
 
 The d-pad moves the keyboard focus, Enter presses the focused key, `<` deletes
 and `clr` empties the field. `abc`/`ABC` toggles upper case.
@@ -116,14 +184,24 @@ this one). That is why the step back inside the app sits on the [ ] button.
 ## Layout
 
 - `app-ordner/src/ui/` - SDL2 user interface (C), touch + on-screen keyboard + Flipper buttons
+  - `osint-ui --selftest` checks the state machine without a display
+  - `osint-ui --screenshot <dir>` renders every screen offscreen for a layout review
 - `app-ordner/src/cli/` - backend `osint-cli` (Go, static)
+  - `findings.go` - shared result and graph model (sources, evidence levels, deduplication)
+  - `personintel.go` - bridge to the person modules; `go test ./...` covers both
 - `app-ordner/app/FlipperOneOSINT.AppDir/` - AppImage template (`AppRun`, `app.toml`, icon)
 - `app-ordner/VERSION` - version of the next build
+- `PersonIntel/` - the person-research module (Python); `python -m pytest -q` in that folder
 
 ## Releases
 
 1. Change `app-ordner/VERSION` and push. GitHub Actions builds the AppImage into `DevBuilds/`.
+   `build-appimage.yml` builds from `main`; `build-appimage-fusion.yml` builds from a
+   `fusion/**` branch, commits only to that branch and refuses to write to `main`.
 2. Test a build; copy the chosen file to `Public Releases/`.
 3. A second workflow places the newest public release into `AppCatalogue/OSINT/` of the Flipper-Emulator repo.
+
+Neither workflow ever replaces an existing AppImage: the file name carries the version and
+the job fails if that file is already there.
 
 The version history is in [DevBuilds/VERSIONS.md](DevBuilds/VERSIONS.md).

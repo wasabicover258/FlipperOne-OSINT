@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "PersonIntel - eigenstaendiges OSINT-Modul fuer journalistische Personenrecherche"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
 dependencies = [
     "cryptography>=41",
     "phonenumbers>=8.13",
