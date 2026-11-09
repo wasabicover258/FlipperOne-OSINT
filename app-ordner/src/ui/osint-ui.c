@@ -1520,6 +1520,27 @@ static void t_geo_categories(void) {
             "clinic + restaurant should be listed under Places");
 }
 
+static void t_ai_highlights(void) {
+    t_reset();
+    push_result("# AI key findings");
+    push_result("? AI point 1: Historical PDF from 2011");
+    push_result("i Excerpt: Archive mentions the name in a dated document.");
+    push_result("i Source: https://example.org/docs/2011.pdf");
+    push_result("? AI point 2: Public academic project");
+    push_result("i Source: https://example.edu/project");
+    T_CHECK(catalog_category_count(CAT_AI)==2,"two AI summary points missing");
+    T_CHECK(catalog_group_count(GR_AI_POINTS)==2,"AI findings not grouped");
+    T_CHECK(catalog[0].excerpt[0]!=0,"PDF excerpt missing in detail");
+    T_CHECK(catalog[0].source[0]!=0,"PDF source missing in detail");
+    screen=S_RUN;run_view=RV_OVERVIEW;
+    T_CHECK(catalog_category_at(0)==CAT_AI,"AI highlights must appear first");
+    catalog_open();
+    T_CHECK(run_view==RV_GROUPS,"AI category cannot open");
+    catalog_open();
+    T_CHECK(run_view==RV_ITEMS,"AI points are not clickable");
+    catalog_open();
+    T_CHECK(run_view==RV_DETAIL,"AI source detail not reachable");
+}
 static int selftest(void) {
     t_menu();
     t_large_output();
@@ -1529,6 +1550,7 @@ static int selftest(void) {
     t_input_editing();
     t_catalog_browser();
     t_geo_categories();
+    t_ai_highlights();
     printf("osint-ui selftest: %d checks ok, %d failed\n", t_ok, t_fail);
     return t_fail == 0 ? 0 : 1;
 }
