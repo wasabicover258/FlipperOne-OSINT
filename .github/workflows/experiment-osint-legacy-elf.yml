@@ -1,0 +1,24 @@
+name: Verify legacy release filename architecture
+on:
+  push:
+    branches:
+      - experiment/chatgpt-v2.0.4-shelf-icon
+    paths:
+      - .github/workflows/experiment-osint-legacy-elf.yml
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Inspect early public release ELF header before any rename
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git show 'origin/main:Public Releases/FlipperOne-OSINT-0.1.0-x86_64.AppImage' > /tmp/osint-legacy-0.1.0.AppImage
+          file /tmp/osint-legacy-0.1.0.AppImage
+          readelf -h /tmp/osint-legacy-0.1.0.AppImage | grep -E 'Class:|Machine:|Data:'
+          sha256sum /tmp/osint-legacy-0.1.0.AppImage
