@@ -182,6 +182,8 @@ func main() {
 	case "person-phone":
 		runPerson("phone", val, confirmed, store)
 	case "person-name":
+		runPublicName(val)
+	case "vendor-name":
 		runPerson("name", val, confirmed, store)
 	case "person-report":
 		runPerson("report_file", val, confirmed, store)
