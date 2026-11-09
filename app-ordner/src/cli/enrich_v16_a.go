@@ -227,6 +227,9 @@ func extraWayback(domain string) {
  var w archiveAvailability
  if err:=extraJSON(extraClient,endpoint,&w);err!=nil{extraMsg("Wayback",err);return}
  e:=w.ArchivedSnapshots.Closest
+ if strings.HasPrefix(e.URL,"http://web.archive.org/") {
+    e.URL="https://"+strings.TrimPrefix(e.URL,"http://")
+ }
  if !e.Available || !strings.HasPrefix(e.URL,"https://web.archive.org/"){
   info("No known accessible Wayback snapshot");return
  }
