@@ -113,8 +113,22 @@ func poiCategory(tags map[string]string) string {
     }
 }
 
-func osmPublicContact(tags map[string]string, name string) string {
-    return cleanField(tags[name],180)
+func isListedPublicFacility(tags map[string]string) bool {
+    if tags["healthcare"]!="" {return true}
+    switch tags["amenity"] {
+    case "hospital","clinic","doctors","dentist","pharmacy","restaurant",
+         "cafe","fast_food","pub","bar","school","university","library",
+         "bank","post_office","townhall","police","fire_station":
+         return true
+    }
+    switch tags["tourism"] {
+    case "hotel","guest_house","museum","attraction": return true
+    }
+    if tags["shop"]!="" && tags["name"]!="" {return true}
+    switch tags["office"] {
+    case "company","government","association":return true
+    }
+    return false
 }
 func preferOSMTag(t map[string]string, keys ...string) string {
     for _,k:=range keys {
@@ -143,6 +157,7 @@ func parseNearbyResults(raw []byte, lat,lon float64, radius int) ([]nearbyPlace,
     seenID:=map[string]bool{}
     for _,e:=range data.Elements {
         if e.ID<=0 || (e.Type!="node"&&e.Type!="way"&&e.Type!="relation") {continue}
+        if !isListedPublicFacility(e.Tags) {continue}
         ref:=fmt.Sprintf("%s/%d",e.Type,e.ID)
         if seenID[ref] {continue}
         seenID[ref]=true
