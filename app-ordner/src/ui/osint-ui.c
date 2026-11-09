@@ -1457,8 +1457,35 @@ static void t_input_editing(void) {
     T_CHECK(quit == 0, "the app must not close here");
 }
 
+/* Large result sets must not overflow or slow the panel down: the list is capped and the
+ * backend output is consumed line by line as it arrives. */
+static void t_large_output(void) {
+    t_reset();
+    for (int i = 0; i < MAXLINES + 500; i++) {
+        char b[80];
+        snprintf(b, sizeof b, "~ finding number %d", i);
+        push_result(b);
+    }
+    T_CHECK(nlines == MAXLINES, "line buffer is %d, expected the cap %d", nlines, MAXLINES);
+    T_CHECK(scroll_pos <= nlines, "scroll position %d beyond the list", scroll_pos);
+    /* the index stays usable as well */
+    nlines = 0;
+    for (int i = 0; i < MAXSEC + 20; i++) {
+        char b[80];
+        snprintf(b, sizeof b, "# section %d", i);
+        push_result(b);
+        push_result("+ one hit");
+    }
+    rebuild_sections();
+    T_CHECK(nsec <= MAXSEC, "section index is %d, expected at most %d", nsec, MAXSEC);
+    int st, en;
+    secRange(nsec - 1, &st, &en);
+    T_CHECK(st >= 0 && en <= nlines && st < en, "last section range %d..%d invalid", st, en);
+}
+
 static int selftest(void) {
     t_menu();
+    t_large_output();
     t_confirm();
     t_noinput();
     t_markers();

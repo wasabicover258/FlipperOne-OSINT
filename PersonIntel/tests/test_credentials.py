@@ -76,3 +76,99 @@ def test_configure_adapter_rejects_unknown_secret_field(engine):
     from personintel.api import ValidationError
     with pytest.raises(ValidationError):
         engine.configure_adapter("pipl", secrets={"kein_feld": "x"})
+
+
+# --------------------------------------------- Betrieb ohne 'cryptography'
+def _hide_cryptography(monkeypatch):
+    """Simuliert ein System ohne das Paket 'cryptography' (schlankes Geraetebuendel)."""
+    import builtins
+    import sys
+    real_import = builtins.__import__
+
+    def fake(name, *a, **kw):
+        if name == "cryptography" or name.startswith("cryptography."):
+            raise ImportError("no module named cryptography")
+        return real_import(name, *a, **kw)
+
+    for mod in [m for m in sys.modules if m.startswith("cryptography")]:
+        monkeypatch.delitem(sys.modules, mod, raising=False)
+    monkeypatch.setattr(builtins, "__import__", fake)
+
+
+def test_personintel_works_without_cryptography(tmp_path, monkeypatch):
+    """Ohne 'cryptography' muss alles laufen, was keine Verschlüsselung braucht."""
+    from personintel.api import AppPaths, Engine, Purpose
+    from personintel.security.crypto import have_cryptography
+    _hide_cryptography(monkeypatch)
+    assert have_cryptography() is False
+
+    paths = AppPaths(data_dir=tmp_path / "d", config_dir=tmp_path / "c")
+    eng = Engine(paths)
+    try:
+        assert len(eng.statuses()) == 10          # Dashboard funktioniert
+        case = eng.create_case("ohne Krypto")
+        eng.set_purpose(case.id, Purpose(category="journalism",
+                                         description="Verifikation einer Quelle für Artikel X",
+                                         authorized_by="Redaktion", active_checks_allowed=True))
+        t = eng.add_target(case.id, "username", "jdoe")
+        assert t.value == "jdoe"
+        assert eng.build_report(case.id).to_markdown()
+        assert eng.audit.verify() == (True, None)
+        assert eng.export_case(case.id)["format"] == "personintel.case"
+    finally:
+        eng.close()
+
+
+def test_encryption_without_cryptography_fails_clearly(tmp_path, monkeypatch):
+    from personintel.api import CredentialError, LockedError, StorageError
+    from personintel.security.credentials import CredentialStore, EncryptedFileBackend
+    from personintel.security.crypto import CryptographyMissing, FieldCipher
+    from personintel.storage.repository import Repository
+    _hide_cryptography(monkeypatch)
+
+    with pytest.raises(CryptographyMissing, match="cryptography"):
+        FieldCipher.from_passphrase("pw", b"0123456789abcdef")
+    store = CredentialStore(EncryptedFileBackend(tmp_path / "c.enc"))
+    with pytest.raises(CredentialError, match="cryptography"):
+        store.backend.unlock("pw")
+    with pytest.raises((StorageError, CryptographyMissing)):
+        Repository(tmp_path / "x.db", "pw")
+
+
+def test_api_keys_from_environment_still_work_without_cryptography(tmp_path, monkeypatch):
+    """Auf dem Gerät kommen Schlüssel über Umgebungsvariablen statt aus dem Speicher."""
+    from personintel.api import AppPaths, Engine
+    from personintel.security.credentials import env_name
+    monkeypatch.setenv(env_name("pipl", "api_key"), "KEY-FROM-ENV")
+    _hide_cryptography(monkeypatch)
+    eng = Engine(AppPaths(data_dir=tmp_path / "d2", config_dir=tmp_path / "c2"))
+    try:
+        assert eng.adapter("pipl").secrets.get("api_key") == "KEY-FROM-ENV"
+        assert eng.adapter("pipl").has_key()
+        st = {s.adapter_id: s for s in eng.statuses()}["pipl"]
+        assert st.state.value in ("unverified", "available")
+    finally:
+        eng.close()
+
+
+def test_phone_validation_without_phonenumbers(monkeypatch):
+    """Das Gerätebündel bringt 'phonenumbers' nicht mit (24 MB Metadaten): die strengere
+    Prüfung entfällt dann, die Grundprüfung muss weiter greifen."""
+    import builtins
+    import sys
+    from personintel.api import ValidationError
+    from personintel.core.validation import normalize_phone
+    real_import = builtins.__import__
+
+    def fake(name, *a, **kw):
+        if name == "phonenumbers":
+            raise ImportError("no module named phonenumbers")
+        return real_import(name, *a, **kw)
+
+    monkeypatch.delitem(sys.modules, "phonenumbers", raising=False)
+    monkeypatch.setattr(builtins, "__import__", fake)
+    assert normalize_phone("+49 30 1234567") == "+49301234567"
+    assert normalize_phone("(+1) 212-555-0100") == "+12125550100"
+    for bad in ("030 1234567", "+49", "keine nummer", "+0 123456789"):
+        with pytest.raises(ValidationError):
+            normalize_phone(bad)

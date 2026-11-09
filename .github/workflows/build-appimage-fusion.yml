@@ -1,0 +1,190 @@
+name: Build AppImage (fusion branch)
+
+# Separate workflow for the fusion branch. It does NOT touch the workflow that builds from
+# main, never pushes to main, and never replaces an existing AppImage: the file name carries
+# app-ordner/VERSION and the job fails if that file already exists.
+#
+# New version = change app-ordner/VERSION and push.
+
+on:
+  push:
+    branches:
+      - 'fusion/**'
+    paths:
+      - 'app-ordner/**'
+      - 'PersonIntel/**'
+      - '.github/workflows/build-appimage-fusion.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  APPDIR: app-ordner/app/FlipperOneOSINT.AppDir
+  ARCH: aarch64
+  OUT_DIR: DevBuilds
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine version and file name
+        id: ver
+        run: |
+          VER=$(tr -d ' \r\n' < app-ordner/VERSION)
+          OUT="$OUT_DIR/FlipperOne-OSINT-${VER}-${ARCH}.AppImage"
+          echo "Version: $VER -> $OUT"
+          if [ -e "$OUT" ]; then
+            echo "ERROR: $OUT already exists. Please increase app-ordner/VERSION." >&2
+            exit 1
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "out=$OUT" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # ---------------------------------------------------------------- tests
+      - name: Backend tests (Go)
+        run: cd app-ordner/src/cli && go vet ./... && go test ./...
+
+      - name: PersonIntel tests (Python)
+        run: |
+          python -m pip install -q --upgrade pip
+          python -m pip install -q './PersonIntel[dev]'
+          cd PersonIntel && QT_QPA_PLATFORM=offscreen python -m pytest -q
+
+      # ------------------------------------------------------------- building
+      - name: Build backend (Go, static)
+        env:
+          VER: ${{ steps.ver.outputs.version }}
+        run: |
+          mkdir -p "$APPDIR/usr/bin"
+          cd app-ordner/src/cli
+          CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.Version=${VER}" \
+            -o "$GITHUB_WORKSPACE/$APPDIR/usr/bin/osint-cli" .
+
+      - name: Build UI (C, SDL2)
+        env:
+          VER: ${{ steps.ver.outputs.version }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libsdl2-dev
+          gcc -std=gnu99 -O2 -Wall -Wextra -DAPP_VERSION="\"${VER}\"" app-ordner/src/ui/osint-ui.c \
+            -o "$APPDIR/usr/bin/osint-ui" $(sdl2-config --cflags --libs)
+          "$APPDIR/usr/bin/osint-ui" --selftest
+          strip "$APPDIR/usr/bin/osint-ui"
+
+      # PersonIntel travels with the bundle as plain Python files. Only pure-Python packages go
+      # in, so the bundle works with whatever Python 3.10+ the device happens to have and never
+      # carries a binary built for the wrong interpreter.
+      #
+      # Left out on purpose:
+      #   'cryptography'  - needs cffi, which has no interpreter-independent wheel. The device
+      #                     therefore has no at-rest encryption and no encrypted credential
+      #                     store; vendor keys are passed as PERSONINTEL_<MODULE>_<FIELD>.
+      #   'phonenumbers'  - 24 MB of country metadata for a check PersonIntel already treats as
+      #                     optional; the regular E.164 validation stays in place.
+      # Both are covered by tests (see PersonIntel/tests/test_credentials.py).
+      - name: Bundle PersonIntel
+        run: |
+          LIB="$APPDIR/usr/lib/personintel"
+          rm -rf "$LIB"
+          mkdir -p "$LIB"
+          cp -r PersonIntel/src/personintel "$LIB/"
+          find "$LIB" -name '__pycache__' -prune -exec rm -rf {} + 2>/dev/null || true
+          find "$LIB" -name '*.dist-info' -prune -exec rm -rf {} + 2>/dev/null || true
+          echo "Bundled Python packages:"
+          ls -1 "$LIB"
+          # No native code at all: nothing that could be built for the wrong interpreter or arch.
+          BAD=$(find "$LIB" -name '*.so' -o -name '*.pyd' | head -20)
+          if [ -n "$BAD" ]; then
+            echo "ERROR: the bundle must stay pure Python, found:" >&2
+            echo "$BAD" >&2
+            exit 1
+          fi
+          du -sh "$LIB"
+
+      - name: Check binaries
+        run: |
+          for f in osint-ui osint-cli; do
+            readelf -h "$APPDIR/usr/bin/$f" | grep -q AArch64 || { echo "ERROR: $f is not ARM64" >&2; exit 1; }
+          done
+          echo "Libraries needed by the UI:"
+          readelf -d "$APPDIR/usr/bin/osint-ui" | grep NEEDED
+          MAXG=$(objdump -T "$APPDIR/usr/bin/osint-ui" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n1)
+          echo "Highest GLIBC version: $MAXG"
+          [ "$(printf '%s\nGLIBC_2.34\n' "$MAXG" | sort -V | tail -n1)" = "GLIBC_2.34" ] || { echo "ERROR: GLIBC > 2.34" >&2; exit 1; }
+          # The five original modules must still work exactly as before.
+          "$APPDIR/usr/bin/osint-cli" version
+          "$APPDIR/usr/bin/osint-cli" phone "0171 1234567"
+          # The person modules must report honestly, with or without a usable Python.
+          APPDIR="$PWD/$APPDIR" "$APPDIR/usr/bin/osint-cli" pi-status x | head -20
+
+      - name: Build AppImage
+        env:
+          OUT: ${{ steps.ver.outputs.out }}
+        run: |
+          curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-aarch64.AppImage
+          chmod +x appimagetool
+          chmod +x "$APPDIR/AppRun" "$APPDIR/usr/bin/"*
+          mkdir -p "$OUT_DIR"
+          ARCH=aarch64 ./appimagetool --appimage-extract-and-run --no-appstream "$APPDIR" "$OUT"
+          readelf -h "$OUT" | grep -q 'AArch64' || { echo "ERROR: file is not ARM64" >&2; exit 1; }
+          ls -l "$OUT"
+          sha256sum "$OUT" | tee "$OUT.sha256"
+
+      - name: Smoke test the finished bundle
+        env:
+          OUT: ${{ steps.ver.outputs.out }}
+        run: |
+          # Runs the bundle the way the app shelf does, without a display.
+          ./"$OUT" --appimage-extract >/dev/null
+          test -f squashfs-root/app.toml
+          grep -q '^wayland' squashfs-root/app.toml
+          APPDIR="$PWD/squashfs-root" squashfs-root/usr/bin/osint-cli pi-status x | tee /tmp/pi.txt | head -5
+          grep -qE 'PersonIntel [0-9]' /tmp/pi.txt || { echo "ERROR: bundled PersonIntel did not start" >&2; exit 1; }
+          grep -q 'of 10 person modules' /tmp/pi.txt || { echo "ERROR: module status missing" >&2; exit 1; }
+          grep -c 'needs:' /tmp/pi.txt || true
+          # A purpose can be documented on the device, and without it queries stay blocked.
+          APPDIR="$PWD/squashfs-root" squashfs-root/usr/bin/osint-cli person-username testuser confirm \
+            | tee /tmp/blocked.txt | head -4
+          grep -q 'No valid research purpose' /tmp/blocked.txt \
+            || { echo "ERROR: a query without a purpose was not blocked" >&2; exit 1; }
+          SDL_VIDEODRIVER=dummy timeout 5 squashfs-root/usr/bin/osint-ui squashfs-root/usr/bin/osint-cli || true
+          squashfs-root/usr/bin/osint-ui --selftest
+
+      - name: Upload as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlipperOne-OSINT-${{ steps.ver.outputs.version }}-aarch64
+          path: |
+            ${{ steps.ver.outputs.out }}
+            ${{ steps.ver.outputs.out }}.sha256
+          if-no-files-found: error
+
+      # Commits to THIS branch only. main is never touched.
+      - name: Commit to DevBuilds on this branch
+        if: github.event_name != 'pull_request'
+        env:
+          VER: ${{ steps.ver.outputs.version }}
+          OUT: ${{ steps.ver.outputs.out }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          if [ "$BRANCH" = "main" ]; then
+            echo "Refusing to commit to main from the fusion workflow." >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$OUT" "$OUT.sha256"
+          git commit -m "DevBuild AppImage ${VER} (${ARCH}, fusion)"
+          git pull --rebase origin "$BRANCH"
+          git push origin "HEAD:${BRANCH}"

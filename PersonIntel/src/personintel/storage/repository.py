@@ -71,6 +71,9 @@ class Repository:
 
     def _open_encryption(self, passphrase: Optional[str]) -> None:
         if self.is_encrypted:
+            from ..security.crypto import MISSING_HINT, have_cryptography
+            if not have_cryptography():
+                raise LockedError("Die Datenbank ist verschluesselt, aber " + MISSING_HINT)
             if not passphrase:
                 raise LockedError("Die Datenbank ist verschluesselt - Passphrase erforderlich.")
             salt = bytes.fromhex(self.get_meta("enc_salt") or "")

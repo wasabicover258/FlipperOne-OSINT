@@ -39,6 +39,7 @@ from .core.engine import Engine
 from .core.errors import AdapterNotAvailable, PersonIntelError
 from .core.models import Evidence, FindingStatus, Purpose, QueryKind, QueryMode, QueryState, ReviewState
 from .security.authorization import PURPOSE_CATEGORIES, ActiveConfirmation
+from .security.crypto import have_cryptography
 
 PROTOCOL_VERSION = 1
 DEVICE_CASE_NAME = "Geräterecherche"
@@ -125,7 +126,8 @@ class Bridge:
                 "schema": RESULT_SCHEMA_VERSION, "adapters": len(self.engine.adapters()),
                 "data_dir": str(self.engine.paths.data_dir),
                 "encrypted": self.engine.repo.is_encrypted,
-                "credentials_locked": self.engine.credentials.locked}
+                "credentials_locked": self.engine.credentials.locked,
+                "crypto_available": have_cryptography()}
 
     def op_bye(self, req: dict) -> dict:
         self._stop = True

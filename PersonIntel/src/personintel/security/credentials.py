@@ -48,6 +48,12 @@ class EncryptedFileBackend:
         return self._cipher is not None
 
     def unlock(self, passphrase: str) -> None:
+        from .crypto import MISSING_HINT, have_cryptography
+        if not have_cryptography():
+            raise CredentialError(
+                "Der verschlüsselte Zugangsdatenspeicher ist nicht verfügbar: " + MISSING_HINT
+                + " Schlüssel können stattdessen als Umgebungsvariable übergeben werden "
+                  "(PERSONINTEL_<MODUL>_<FELD>).")
         if self.path.exists():
             blob = json.loads(self.path.read_text(encoding="utf-8"))
             salt = base64.b64decode(blob["salt"])

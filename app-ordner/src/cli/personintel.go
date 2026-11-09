@@ -31,10 +31,15 @@ func bridgeCommand() ([]string, string) {
 	if p, err := exec.LookPath("personintel-cli"); err == nil {
 		return []string{p, "bridge"}, p
 	}
+	// Im Bündel mitgeliefert: reine Python-Dateien unter usr/lib/personintel, ausgeführt mit
+	// dem Python des Systems. Der Pfad wird über PYTHONPATH gesetzt (siehe bundledPython).
 	if appdir := os.Getenv("APPDIR"); appdir != "" {
-		p := filepath.Join(appdir, "usr", "lib", "personintel", "bin", "personintel-cli")
-		if st, err := os.Stat(p); err == nil && !st.IsDir() {
-			return []string{p, "bridge"}, p
+		lib := filepath.Join(appdir, "usr", "lib", "personintel")
+		if st, err := os.Stat(filepath.Join(lib, "personintel", "__init__.py")); err == nil && !st.IsDir() {
+			if py := anyPython(); py != "" {
+				bundledLib = lib
+				return []string{py, "-m", "personintel.cli", "bridge"}, py + " + bundled PersonIntel"
+			}
 		}
 	}
 	for _, py := range []string{"python3", "python"} {
@@ -51,8 +56,20 @@ func bridgeCommand() ([]string, string) {
 	return nil, ""
 }
 
-const bridgeRequirement = "Install PersonIntel on the device: pipx install personintel " +
-	"(or set PERSONINTEL_CMD to its personintel-cli)."
+// bundledLib ist gesetzt, wenn PersonIntel aus dem Bündel benutzt wird.
+var bundledLib string
+
+func anyPython() string {
+	for _, py := range []string{"python3", "python3.12", "python3.11", "python3.10", "python"} {
+		if p, err := exec.LookPath(py); err == nil {
+			return p
+		}
+	}
+	return ""
+}
+
+const bridgeRequirement = "The bundle carries PersonIntel, but no python3 was found on the device. " +
+	"Install python3 (>= 3.10), or set PERSONINTEL_CMD to an existing personintel-cli."
 
 // bridge ist eine laufende Brücke.
 type bridge struct {
@@ -83,6 +100,14 @@ func openBridge(dataDir string) (*bridge, error) {
 	}
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Env = append(os.Environ(), "PYTHONUNBUFFERED=1", "PYTHONDONTWRITEBYTECODE=1")
+	if bundledLib != "" {
+		// Nur anhängen, damit eine auf dem Gerät installierte Fassung Vorrang behält.
+		if old := os.Getenv("PYTHONPATH"); old != "" {
+			cmd.Env = append(cmd.Env, "PYTHONPATH="+old+string(os.PathListSeparator)+bundledLib)
+		} else {
+			cmd.Env = append(cmd.Env, "PYTHONPATH="+bundledLib)
+		}
+	}
 	stdinR, stdinW, err := os.Pipe()
 	if err != nil {
 		return nil, err
@@ -264,12 +289,13 @@ func runPIStatus() {
 	defer b.close()
 
 	var hello struct {
-		Version   string `json:"version"`
-		Protocol  int    `json:"protocol"`
-		Adapters  int    `json:"adapters"`
-		DataDir   string `json:"data_dir"`
-		Encrypted bool   `json:"encrypted"`
-		Locked    bool   `json:"credentials_locked"`
+		Version    string `json:"version"`
+		Protocol   int    `json:"protocol"`
+		Adapters   int    `json:"adapters"`
+		DataDir    string `json:"data_dir"`
+		Encrypted  bool   `json:"encrypted"`
+		Locked     bool   `json:"credentials_locked"`
+		CryptoHere bool   `json:"crypto_available"`
 	}
 	raw, err := b.call(map[string]any{"op": "hello"}, nil)
 	if err != nil {
@@ -279,7 +305,10 @@ func runPIStatus() {
 	json.Unmarshal(raw, &hello)
 	info("PersonIntel %s (protocol %d) via %s", hello.Version, hello.Protocol, b.path)
 	info("Data: %s%s", hello.DataDir, map[bool]string{true: " (encrypted)", false: ""}[hello.Encrypted])
-	if hello.Locked {
+	if !hello.CryptoHere {
+		info("No encrypted credential store on this device (the bundle is pure Python).")
+		info("Pass vendor keys as PERSONINTEL_<MODULE>_<FIELD>, e.g. PERSONINTEL_PIPL_API_KEY.")
+	} else if hello.Locked {
 		warn("Credential store locked: modules that need an API key stay unavailable")
 	}
 
