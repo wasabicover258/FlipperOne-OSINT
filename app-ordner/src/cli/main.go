@@ -146,20 +146,28 @@ func main() {
 	// --- infrastructure (unchanged behaviour) ---
 	case "username":
 		runUsername(val)
+        extraUsernameGitHub(val)
 	case "email":
 		runEmail(val)
+        extraEmailDANE(val)
 	case "phone":
 		runPhone(val)
+        extraPhoneArea(val)
 	case "domain":
+        extraWayback(normalizeDomain(val))
 		runDomain(val)
 	case "ip":
+        extraIPProvider(val)
 		runIP(val)
 	// --- new unified entry types; sources remain separate and attributable ---
 	case "ipv4":
+        extraIPProvider(val)
 		runTypedIP(val, false)
 	case "ipv6":
+        extraIPProvider(val)
 		runTypedIP(val, true)
 	case "website":
+        if host,err:=normalizeWebInput(val);err==nil{extraWayback(host)}
 		runWebInput(val)
 	case "gps":
 		runGPS(val)
@@ -190,12 +198,15 @@ func main() {
 	// --- combined: infrastructure and person modules in one run, merged ---
 	case "combo-username":
 		runUsername(val)
+        extraUsernameGitHub(val)
 		if confirmed { runPerson("username", val, true, store) }
 	case "combo-email":
 		runEmail(val)
+        extraEmailDANE(val)
 		if confirmed { runPerson("email", val, true, store) }
 	case "combo-phone":
 		runPhone(val)
+        extraPhoneArea(val)
 		if confirmed { runPerson("phone", val, true, store) }
 
 	case "person-email":
@@ -206,6 +217,7 @@ func main() {
 		runPerson("phone", val, confirmed, store)
 	case "person-name":
 		runPublicName(val)
+        extraNameScholar(val)
 	case "vendor-name":
 		runPerson("name", val, confirmed, store)
 	case "person-report":
