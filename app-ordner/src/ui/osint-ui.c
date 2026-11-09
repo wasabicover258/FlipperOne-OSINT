@@ -249,7 +249,7 @@ static int nlines = 0, scroll_pos = 0, follow = 1;
 /* Result views: 0 = live/full scroll, 1 = overview (list of sections),
  * 2 = one section opened from the overview. The overview is an index of
  * everything found, each row a category the d-pad opens. */
-enum { RV_FULL, RV_OVERVIEW, RV_SECTION };
+enum { RV_FULL, RV_OVERVIEW, RV_SECTION, RV_GROUPS, RV_ITEMS, RV_DETAIL };
 static int run_view = RV_FULL;
 static int sec_sel = 0, sec_open = 0, sec_view = 0;
 static int finished_seen = 0;
@@ -414,10 +414,14 @@ static void wrap_add(char m, const char *s, int kind) {
     }
 }
 
+/* Source-aware hierarchical result browser. */
+#include "result_catalog.h"
+
 static void push_result(const char *raw) {
     char m = raw[0];
     const char *rest = raw[0] ? (raw[1] == ' ' ? raw + 2 : raw + 1) : raw;
     got_output = 1;
+    catalog_ingest(raw);
     switch (m) {
     case '#':
         if (nlines > 0) add_line("", 0);
@@ -546,6 +550,7 @@ static void start_run(void) {
     nlines = 0;
     scroll_pos = 0;
     follow = 1;
+    catalog_reset();
     inlen = 0;
     finished = 0;
     got_output = 0;
@@ -635,7 +640,7 @@ static void scroll_by(int d) {
 
 static void go_back_from_run(void) {
     stop_child();
-    screen = S_INPUT;
+    screen = S_MENU;
 }
 
 static void menu_sync_view(void);
@@ -765,47 +770,27 @@ static void act_back(void) {
         else in_delete();
         break;
     case S_CONFIRM: screen = S_INPUT; break;
-    case S_RUN: go_back_from_run(); break;
+    case S_RUN:
+        if (running || run_view==RV_FULL) go_back_from_run();
+        else catalog_back();
+        break;
     default: break;
     }
 }
 
+/* Z goes home; X goes back one level. The old All/Index toggle is removed. */
 static void act_z(void) {
     if (screen == S_INPUT) in_move(-1);
-    else if (screen == S_CONFIRM) cf_third = !cf_third; /* tick the first statement */
+    else if (screen == S_CONFIRM) cf_third = !cf_third;
+    else if (screen == S_RUN) go_back_from_run();
     else quit = 1;
 }
-
-/* X switches between the index and the content:
- *   running        -> jump to top of the live list
- *   section view   -> back to the overview
- *   overview       -> show the full continuous list ("All")
- *   full (done)    -> back to the overview ("Index")
- */
 static void act_x(void) {
-    if (screen == S_INPUT) {
-        in_move(1);
-        return;
-    }
-    if (screen == S_CONFIRM) {
-        cf_tos = !cf_tos; /* tick the second statement */
-        return;
-    }
-    if (screen != S_RUN) return;
-    if (running) {
-        scroll_by(-MAXLINES);
-        return;
-    }
-    if (run_view == RV_SECTION) {
-        run_view = RV_OVERVIEW;
-    } else if (run_view == RV_OVERVIEW) {
-        run_view = RV_FULL;
-        scroll_pos = 0;
-        follow = 0;
-    } else if (nsec > 0) {
-        run_view = RV_OVERVIEW;
-    } else {
-        scroll_by(-MAXLINES);
+    if (screen == S_INPUT) { in_move(1); return; }
+    if (screen == S_CONFIRM) { cf_tos = !cf_tos; return; }
+    if (screen == S_RUN) {
+        if (running || run_view == RV_FULL) go_back_from_run();
+        else catalog_back();
     }
 }
 
@@ -837,7 +822,9 @@ static void act_ok(void) {
             start_run();
         }
         break;
-    case S_RUN: go_back_from_run(); break;
+    case S_RUN:
+        if (!running && run_view!=RV_FULL) catalog_open();
+        break;
     default: break;
     }
 }
@@ -910,30 +897,24 @@ static void on_key(const SDL_KeyboardEvent *k, char *kbuf) {
         }
         break;
     case S_RUN:
-        if (s == SDLK_ESCAPE) go_back_from_run();
-        else if (s == SDLK_UP) {
-            if (run_view == RV_OVERVIEW) { if (sec_sel > 0) sec_sel--; }
-            else scroll_by(-1);
+        if (s == SDLK_ESCAPE) {
+            if (running || run_view==RV_FULL) go_back_from_run();
+            else catalog_back();
+        } else if (s == SDLK_UP) {
+            if (run_view==RV_FULL) scroll_by(-1); else catalog_move(-1);
         } else if (s == SDLK_DOWN) {
-            if (run_view == RV_OVERVIEW) { if (sec_sel < nsec - 1) sec_sel++; }
-            else scroll_by(1);
+            if (run_view==RV_FULL) scroll_by(1); else catalog_move(1);
         } else if (enter) {
-            if (run_view == RV_OVERVIEW && nsec > 0) {
-                sec_open = sec_sel;
-                run_view = RV_SECTION;
-                int st, en;
-                secRange(sec_open, &st, &en);
-                scroll_pos = st;
-                follow = 0;
-            } else if (run_view == RV_SECTION) {
-                run_view = RV_OVERVIEW;
-            } else if (run_view == RV_FULL && finished && nsec > 0) {
-                run_view = RV_OVERVIEW;
-            }
-        } else if (s == SDLK_PAGEUP) scroll_by(-(VH - 1));
-        else if (s == SDLK_PAGEDOWN) scroll_by(VH - 1);
-        else if (s == SDLK_HOME) scroll_by(-MAXLINES);
-        else if (s == SDLK_END) scroll_by(MAXLINES);
+            if (!running && run_view!=RV_FULL) catalog_open();
+        } else if (s == SDLK_PAGEUP) {
+            if (run_view==RV_FULL) scroll_by(-(VH-1)); else catalog_move(-(CAT_VISIBLE-1));
+        } else if (s == SDLK_PAGEDOWN) {
+            if (run_view==RV_FULL) scroll_by(VH-1); else catalog_move(CAT_VISIBLE-1);
+        } else if (s == SDLK_HOME) {
+            if (run_view==RV_FULL) scroll_by(-MAXLINES); else catalog_move(-MAXLINES);
+        } else if (s == SDLK_END) {
+            if (run_view==RV_FULL) scroll_by(MAXLINES); else catalog_move(MAXLINES);
+        }
         break;
     }
 }
@@ -978,18 +959,8 @@ static void on_click(int px, int py) {
     } else if (screen == S_CONFIRM) {
         if (y >= CF_Y0 && y < CF_Y0 + CH + 4) cf_third = !cf_third;
         else if (y >= CF_Y0 + CF_GAP && y < CF_Y0 + CF_GAP + CH + 4) cf_tos = !cf_tos;
-    } else if (screen == S_RUN && run_view == RV_OVERVIEW && y >= HDR) {
-        int r = (y - HDR) / CH;
-        int i = sec_view + r;
-        if (i >= 0 && i < nsec) {
-            sec_sel = i;
-            sec_open = i;
-            run_view = RV_SECTION;
-            int st, en;
-            secRange(sec_open, &st, &en);
-            scroll_pos = st;
-            follow = 0;
-        }
+    } else if (screen == S_RUN && run_view != RV_FULL && y >= 17 && y < 17+CAT_ROW_H*CAT_VISIBLE) {
+        catalog_click_row((y-17)/CAT_ROW_H);
     }
 }
 
@@ -1007,11 +978,8 @@ static void on_drag(int py, int down) {
 }
 
 static void on_wheel(int dy) {
-    if (screen == S_RUN && run_view == RV_OVERVIEW) {
-        sec_sel -= dy;
-        if (sec_sel < 0) sec_sel = 0;
-        if (sec_sel > nsec - 1) sec_sel = nsec - 1;
-    } else if (screen == S_RUN) scroll_by(-dy * 3);
+    if (screen == S_RUN && run_view != RV_FULL) catalog_move(-dy*2);
+    else if (screen == S_RUN) scroll_by(-dy * 3);
     else if (screen == S_MENU) {
         sel = (sel - dy + NMODES * 8) % NMODES;
         menu_sync_view();
@@ -1200,7 +1168,7 @@ static void draw_full(void) {
     else snprintf(right, sizeof right, "All  %d lines", nlines);
     title(right);
     draw_lines(0, nlines);
-    softkeys("Exit", running ? "Top" : "Index", running ? "Stop" : "Refresh", "Again");
+    softkeys("Home", "Back", running ? "Stop" : "Again", NULL);
 }
 
 static void draw_section(void) {
@@ -1257,19 +1225,15 @@ static void draw_overview(void) {
 }
 
 static void draw_run(void) {
-    /* When the run finishes, switch from the live list to the overview once. */
+    /* During the search, live output remains available; when finished,
+     * enter the categorized browser automatically. */
     if (finished && !finished_seen) {
         finished_seen = 1;
-        rebuild_sections();
-        if (nsec > 0) {
-            run_view = RV_OVERVIEW;
-            sec_sel = 0;
-            sec_view = 0;
-        }
+        run_view = RV_OVERVIEW;
+        cat_sel = cat_top = 0;
     }
-    if (run_view == RV_OVERVIEW) draw_overview();
-    else if (run_view == RV_SECTION) draw_section();
-    else draw_full();
+    if (run_view == RV_FULL) draw_full();
+    else catalog_draw();
 }
 
 static void render(void) {
@@ -1310,6 +1274,7 @@ static void t_reset(void) {
     run_confirmed = 0;
     cf_third = cf_tos = 0;
     nlines = 0;
+    catalog_reset();
     nsec = 0;
     running = 0;
     finished = 0;
