@@ -1304,9 +1304,15 @@ static void t_menu(void) {
     const char *first6[] = {"combo-phone", "combo-email", "combo-username", "person-name", "domain", "ip"};
     for (int i = 0; i < 6; i++)
         T_CHECK(strcmp(modes[i].cmd, first6[i]) == 0, "mode %d is %s, expected %s", i, modes[i].cmd, first6[i]);
-    T_CHECK(t_mode_by_cmd("phone") >= 0, "original phone mode must remain available");
-    T_CHECK(t_mode_by_cmd("email") >= 0, "original email mode must remain available");
-    T_CHECK(t_mode_by_cmd("username") >= 0, "original username mode must remain available");
+    int found_phone = 0, found_email = 0, found_username = 0;
+    for (int i = 0; i < NMODES; i++) {
+        if (strcmp(modes[i].cmd, "phone") == 0) found_phone = 1;
+        if (strcmp(modes[i].cmd, "email") == 0) found_email = 1;
+        if (strcmp(modes[i].cmd, "username") == 0) found_username = 1;
+    }
+    T_CHECK(found_phone, "original phone mode must remain available");
+    T_CHECK(found_email, "original email mode must remain available");
+    T_CHECK(found_username, "original username mode must remain available");
     /* every mode reachable with the d-pad, and the selection stays visible */
     for (int i = 0; i < NMODES; i++) {
         T_CHECK(sel == i, "selection %d, expected %d", sel, i);
