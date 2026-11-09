@@ -153,19 +153,73 @@ jobs:
         env:
           OUT: ${{ steps.ver.outputs.out }}
         run: |
-          # Runs the bundle the way the app shelf does, without a display.
+          set -eu
           ./"$OUT" --appimage-extract >/dev/null
           test -f squashfs-root/app.toml
           grep -q '^wayland' squashfs-root/app.toml
-          APPDIR="$PWD/squashfs-root" squashfs-root/usr/bin/osint-cli pi-status x | tee /tmp/pi.txt | head -5
-          grep -qE 'PersonIntel [0-9]' /tmp/pi.txt || { echo "ERROR: bundled PersonIntel did not start" >&2; exit 1; }
+
+          # The device has no installed PersonIntel: strip it from PATH so the bundled copy is
+          # the only one that can answer. Without this the test would silently pass against the
+          # pip install from the test step and prove nothing about the bundle.
+          BIN=$(mktemp -d)
+          ln -s /usr/bin/python3 "$BIN/python3"
+          # A stand-in for sherlock that writes the documented CSV, so an active check is
+          # actually available and the confirmation rule can be exercised.
+          cat > "$BIN/sherlock" <<'SH'
+          #!/usr/bin/env python3
+          import csv, sys
+          a = sys.argv[1:]
+          if "--version" in a: print("sherlock 0.16.0"); sys.exit(0)
+          if "--help" in a: print("usage: sherlock [--csv] [--print-found] [--no-color] [--timeout TIMEOUT]"); sys.exit(0)
+          u = a[0]
+          with open(f"{u}.csv", "w", newline="") as fh:
+              w = csv.writer(fh)
+              w.writerow(["username","name","url_main","url_user","exists","http_status","response_time_s"])
+              w.writerow([u,"GitHub","https://github.com",f"https://github.com/{u}","Claimed",200,0.2])
+          SH
+          sed -i 's/^          //' "$BIN/sherlock"
+          chmod +x "$BIN/sherlock"
+          export PATH="$BIN:/usr/bin:/bin"
+          export APPDIR="$PWD/squashfs-root"
+          export PERSONINTEL_DATA_DIR=$(mktemp -d)
+          unset PERSONINTEL_CMD || true
+          CLI=squashfs-root/usr/bin/osint-cli
+          command -v personintel-cli && { echo "ERROR: an installed PersonIntel would mask the bundle" >&2; exit 1; } || true
+
+          echo "--- module status from the bundle"
+          $CLI pi-status x | tee /tmp/pi.txt | head -6
+          grep -q 'bundled PersonIntel' /tmp/pi.txt || { echo "ERROR: the bundled copy was not used" >&2; exit 1; }
           grep -q 'of 10 person modules' /tmp/pi.txt || { echo "ERROR: module status missing" >&2; exit 1; }
-          grep -c 'needs:' /tmp/pi.txt || true
-          # A purpose can be documented on the device, and without it queries stay blocked.
-          APPDIR="$PWD/squashfs-root" squashfs-root/usr/bin/osint-cli person-username testuser confirm \
-            | tee /tmp/blocked.txt | head -4
-          grep -q 'No valid research purpose' /tmp/blocked.txt \
-            || { echo "ERROR: a query without a purpose was not blocked" >&2; exit 1; }
+          grep -q 'No encrypted credential store' /tmp/pi.txt || { echo "ERROR: missing note about the credential store" >&2; exit 1; }
+
+          echo "--- a query without a documented purpose must be blocked"
+          $CLI person-username testuser confirm | tee /tmp/a.txt | head -3
+          grep -q 'No valid research purpose' /tmp/a.txt || { echo "ERROR: query ran without a purpose" >&2; exit 1; }
+
+          echo "--- documenting a purpose"
+          $CLI pi-case "Verifikation einer Quelle fuer einen Artikel ueber Foerdermittel" | tee /tmp/b.txt | head -3
+          grep -q 'Purpose documented' /tmp/b.txt || { echo "ERROR: purpose was not accepted" >&2; exit 1; }
+
+          echo "--- an active check without confirmation must be refused"
+          $CLI person-username testuser | tee /tmp/c.txt | head -4
+          grep -qi 'est.*tigung erforderlich' /tmp/c.txt || { echo "ERROR: active check ran unconfirmed" >&2; exit 1; }
+          grep -q 'No module could run this query' /tmp/c.txt || { echo "ERROR: something ran anyway" >&2; exit 1; }
+
+          echo "--- with confirmation it runs and the finding carries source and evidence level"
+          $CLI person-username testuser confirm | tee /tmp/d.txt | head -12
+          grep -q 'module(s) ran: sherlock' /tmp/d.txt || { echo "ERROR: the confirmed query did not run" >&2; exit 1; }
+          grep -q '^~ ' /tmp/d.txt || { echo "ERROR: no finding with an evidence level" >&2; exit 1; }
+          grep -q 'sherlock 0.16.0' /tmp/d.txt || { echo "ERROR: the source does not name the tool version" >&2; exit 1; }
+          grep -q '^= ' /tmp/d.txt && { echo "ERROR: a module reported 'proven' - only a human review may" >&2; exit 1; } || true
+
+          echo "--- the infrastructure modules are untouched"
+          $CLI phone "0171 1234567" | grep -q '+491711234567' || { echo "ERROR: phone module changed" >&2; exit 1; }
+
+          echo "--- no process is left behind"
+          sleep 1
+          ! pgrep -f 'personintel.cli' || { echo "ERROR: a bridge process stayed alive" >&2; exit 1; }
+
+          echo "--- the UI starts and its state machine is intact"
           SDL_VIDEODRIVER=dummy timeout 5 squashfs-root/usr/bin/osint-ui squashfs-root/usr/bin/osint-cli || true
           squashfs-root/usr/bin/osint-ui --selftest
 
