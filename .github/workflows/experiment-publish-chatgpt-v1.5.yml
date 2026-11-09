@@ -5,6 +5,8 @@ on:
       - experiment/chatgpt-v1.5-poi
     paths:
       - .github/workflows/experiment-publish-chatgpt-v1.5.yml
+      - app-ordner/src/cli/**
+      - app-ordner/src/ui/**
   workflow_dispatch:
 
 permissions:
