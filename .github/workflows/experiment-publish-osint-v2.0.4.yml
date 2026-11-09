@@ -1,0 +1,89 @@
+name: Publish OSINT 2.0.4 ARM64
+# OSINT branding + shelf icon; no changes to reconnaissance algorithms.
+on:
+  push:
+    branches:
+      - experiment/chatgpt-v2.0.4-shelf-icon
+    paths:
+      - .github/workflows/experiment-publish-osint-v2.0.4.yml
+      - IntegrationTests/OSINT-ARM64/**
+      - app-ordner/app/**
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install native ARM64 build dependencies
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = "aarch64"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libsdl2-dev file
+          curl -fsSL -o /tmp/appimagetool-aarch64.AppImage https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-aarch64.AppImage
+          chmod +x /tmp/appimagetool-aarch64.AppImage
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.2'
+
+      - name: Build OSINT 2.0.4 with new shelf icon
+        env:
+          BUILD_STAMP: '2.0.4'
+          APPIMAGETOOL: /tmp/appimagetool-aarch64.AppImage
+        run: |
+          set -euo pipefail
+          ( cd app-ordner/src/cli && go mod tidy )
+          bash IntegrationTests/OSINT-ARM64/build_arm64.sh
+          SOURCE="IntegrationTests/OSINT-ARM64/artifacts/FlipperOne-OSINT-2.0.4-aarch64.AppImage"
+          test -s "$SOURCE"
+          file "$SOURCE"
+          readelf -h "$SOURCE" | grep -q 'AArch64'
+          echo "PASS architecture: aarch64"
+
+      - name: Verify emulator-white grayscale SDL2 interface
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/osint-palette"
+          gcc -std=gnu99 -O2 -Wall app-ordner/src/ui/osint-ui.c -o "$RUNNER_TEMP/osint-ui-test" $(sdl2-config --cflags --libs)
+          SDL_VIDEODRIVER=dummy "$RUNNER_TEMP/osint-ui-test" --screenshot "$RUNNER_TEMP/osint-palette"
+          python3 IntegrationTests/FlipperFusion-Independent-20261109/verify_display_palette.py "$RUNNER_TEMP/osint-palette"
+
+      - name: Upload UI screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: osint-2.0.4-screen-evidence
+          path: ${{ runner.temp }}/osint-palette/*.bmp
+          retention-days: 30
+
+      - name: Publish ONLY correct aarch64 names in test and public folders
+        run: |
+          set -euo pipefail
+          SOURCE="IntegrationTests/OSINT-ARM64/artifacts/FlipperOne-OSINT-2.0.4-aarch64.AppImage"
+          sha256sum "$SOURCE"
+          git fetch origin main
+          git worktree add --detach "$RUNNER_TEMP/osint-main" origin/main
+          cd "$RUNNER_TEMP/osint-main"
+          NAME="FlipperOne-OSINT-2.0.4-aarch64.AppImage"
+          for DIR in "ChatGPT Test" "Public Releases"; do
+            test ! -e "$DIR/$NAME" || { echo "Refusing to overwrite $DIR/$NAME" >&2; exit 1; }
+            mkdir -p "$DIR"
+            cp "$GITHUB_WORKSPACE/$SOURCE" "$DIR/$NAME"
+            chmod +x "$DIR/$NAME"
+            sha256sum "$DIR/$NAME"
+          done
+          cmp "ChatGPT Test/$NAME" "Public Releases/$NAME"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "ChatGPT Test/$NAME" "Public Releases/$NAME"
+          git commit -m "Publish OSINT 2.0.4 ARM64 with shelf icon and clean filename"
+          git push origin HEAD:main
+          echo "Published correct ARM64 name in both folders."
