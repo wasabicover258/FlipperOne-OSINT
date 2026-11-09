@@ -102,7 +102,19 @@ jobs:
       #                     optional; the regular E.164 validation stays in place.
       # Both are covered by tests (see PersonIntel/tests/test_credentials.py).
       - name: Bundle PersonIntel
+        env:
+          VER: ${{ steps.ver.outputs.version }}
         run: |
+          # DIAGNOSE: eine Version mit "nolib" im Namen laesst das Python-Paket weg. Damit
+          # laesst sich pruefen, ob usr/lib/personintel der Grund ist, warum flipctl AppRun
+          # bei Fusionsbundles nicht ausfuehrt.
+          case "$VER" in
+            *nolib*)
+              echo "DIAGNOSE: PersonIntel wird nicht mitgeliefert ($VER)"
+              rm -rf "$APPDIR/usr/lib"
+              exit 0
+              ;;
+          esac
           LIB="$APPDIR/usr/lib/personintel"
           rm -rf "$LIB"
           mkdir -p "$LIB"
@@ -172,6 +184,16 @@ jobs:
         run: |
           set -eu
           ./"$OUT" --appimage-extract >/dev/null
+          case "$VER" in
+            *nolib*)
+              echo "DIAGNOSE-Build ohne PersonIntel: nur Bundle-Struktur wird geprueft."
+              test -f squashfs-root/app.toml
+              grep -q '^wayland' squashfs-root/app.toml
+              test -x squashfs-root/usr/bin/osint-ui
+              test ! -d squashfs-root/usr/lib
+              exit 0
+              ;;
+          esac
           test -f squashfs-root/app.toml
           grep -q '^wayland' squashfs-root/app.toml
           grep -q "^name = \"OSINT ${VER}\"" squashfs-root/app.toml
