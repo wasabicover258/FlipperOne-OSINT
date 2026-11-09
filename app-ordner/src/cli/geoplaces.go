@@ -354,8 +354,9 @@ func showNearbyPlaces(lat,lon float64,radius int,nameFilter string) int {
         // At most two distinct business websites are DNS-enriched.
         reportNearbyPlace(p,len(seenDomains)<2,seenDomains)
     }
-    if n==0{miss("No matching mapped businesses or facilities in this radius")}
-    else {found("%d mapped places with public details",n)}
+    if n==0 { miss("No matching mapped businesses or facilities in this radius") } else {
+        found("%d mapped places with public details",n)
+    }
     info("OSM data (c) OpenStreetMap contributors; names and contacts may be outdated.")
     return n
 }
