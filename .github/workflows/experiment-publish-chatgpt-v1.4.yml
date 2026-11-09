@@ -2,7 +2,7 @@ name: Publish ChatGPT Test 1.4 AppImage
 on:
   push:
     branches:
-      - experiment/flipper-fusion-isolated-20261109
+      - experiment/chatgpt-v1.4-ui
     paths:
       - .github/workflows/experiment-publish-chatgpt-v1.4.yml
   workflow_dispatch:
