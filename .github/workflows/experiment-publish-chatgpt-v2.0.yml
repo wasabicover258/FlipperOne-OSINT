@@ -2,14 +2,6 @@ name: Publish ChatGPT Test 2.0 AppImage
 # Version 2.0 is already published and must not be overwritten.
 # Future source changes need a NEW version and a NEW publish workflow.
 on:
-  push:
-    branches:
-      - experiment/chatgpt-v2.0-ai-research
-    paths:
-      - .github/workflows/experiment-publish-chatgpt-v2.0.yml
-      - app-ordner/src/cli/**
-      - app-ordner/src/ui/**
-      - app-ordner/app/**
   workflow_dispatch:
 
 permissions:
