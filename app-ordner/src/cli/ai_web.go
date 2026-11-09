@@ -78,8 +78,7 @@ func plainSnippet(s string) string {
 func publicSourceURL(raw string) string {
   u,err:=url.Parse(strings.TrimSpace(raw))
   if err!=nil||u.Scheme!="https"||u.User!=nil||u.Hostname()==""||u.Port()!="" {return ""}
-  if len(raw)>500 || strings.ContainsAny(raw,"
-	") {return ""}
+  if len(raw)>500 || strings.ContainsAny(raw,string([]byte{13,10,9})) {return ""}
   host:=strings.ToLower(u.Hostname())
   if host=="localhost"||strings.HasSuffix(host,".local")||strings.HasSuffix(host,".internal"){return ""}
   if ip:=netParseIP(host);ip!=nil && !isPublicIP(ip) {return ""}
