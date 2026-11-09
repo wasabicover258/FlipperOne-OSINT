@@ -27,7 +27,7 @@ static const char *const cat_titles[CAT_NUM] = {
 enum {
     GR_IDENT, GR_WORK, GR_PHONE, GR_EMAIL,
     GR_X, GR_GITHUB, GR_INSTAGRAM, GR_FACEBOOK, GR_REDDIT, GR_SOCIAL,
-    GR_COORD, GR_MAP, GR_PLACE,
+    GR_COORD, GR_MAP, GR_PLACE, GR_HEALTH, GR_FOOD, GR_SHOPS,
     GR_BUSINESS, GR_ORGWEB,
     GR_IP, GR_DNS, GR_SERVICES, GR_SECURITY, GR_TECH,
     GR_WIKI, GR_DOCUMENT, GR_SOURCE,
@@ -37,6 +37,7 @@ static const char *const group_titles[GR_NUM] = {
     "Names & identities", "Work & education", "Phone numbers", "Email addresses",
     "X / Twitter", "GitHub", "Instagram", "Facebook", "Reddit",
     "Other social accounts", "Coordinates", "Maps & locations", "Places",
+    "Clinics & healthcare", "Restaurants & cafes", "Shops & services",
     "Companies & groups", "Official websites",
     "IP addresses & ASN", "DNS & domains", "Services & ports", "TLS & security",
     "Other technical data", "Wikidata / Wikipedia", "Reports & documents",
@@ -45,7 +46,7 @@ static const char *const group_titles[GR_NUM] = {
 static const unsigned char group_cat[GR_NUM] = {
     CAT_PERSON,CAT_PERSON,CAT_CONTACT,CAT_CONTACT,
     CAT_PROFILES,CAT_PROFILES,CAT_PROFILES,CAT_PROFILES,CAT_PROFILES,CAT_PROFILES,
-    CAT_PLACES,CAT_PLACES,CAT_PLACES,
+    CAT_PLACES,CAT_PLACES,CAT_PLACES,CAT_PLACES,CAT_PLACES,CAT_PLACES,
     CAT_ORGS,CAT_ORGS,
     CAT_TECH,CAT_TECH,CAT_TECH,CAT_TECH,CAT_TECH,
     CAT_DOCS,CAT_DOCS,CAT_DOCS,CAT_OTHER,CAT_OTHER
@@ -96,10 +97,17 @@ static int catalog_group(const char *s, const char *section, char marker) {
         catalog_has(s,"longitude") || catalog_has(s,"gps")) return GR_COORD;
     if (catalog_has(s,"openstreetmap") || catalog_has(s,"osm") ||
         catalog_has(s,"map:")) return GR_MAP;
+    if (catalog_has(s,"clinic:") || catalog_has(s,"hospital:") ||
+        catalog_has(s,"healthcare:") || catalog_has(s,"pharmacy:")) return GR_HEALTH;
+    if (catalog_has(s,"restaurant:") || catalog_has(s,"cafe:") ||
+        catalog_has(s,"food & drink:")) return GR_FOOD;
+    if (catalog_has(s,"shop:") || catalog_has(s,"public service:")) return GR_SHOPS;
     if (catalog_has(s,"location") || catalog_has(s,"address") ||
         catalog_has(s,"place:") || catalog_has(s,"country:") ||
+        catalog_has(s,"closest mapped feature") ||
         catalog_has(section,"geographic")) return GR_PLACE;
-    if (catalog_has(s,"official website") || catalog_has(s,"company website")) return GR_ORGWEB;
+    if (catalog_has(s,"official website") || catalog_has(s,"company website") ||
+        catalog_has(s,"business website")) return GR_ORGWEB;
     if (catalog_has(s,"organization") || catalog_has(s,"company") ||
         catalog_has(s,"employer") || catalog_has(s,"subsidiary") ||
         catalog_has(s,"headquarters") || catalog_has(s,"operator:") ||
