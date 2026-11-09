@@ -154,6 +154,29 @@ func main() {
 		runDomain(val)
 	case "ip":
 		runIP(val)
+	// --- new unified entry types; sources remain separate and attributable ---
+	case "ipv4":
+		runTypedIP(val, false)
+	case "ipv6":
+		runTypedIP(val, true)
+	case "website":
+		runWebInput(val)
+	case "gps":
+		runGPS(val)
+	case "address":
+		runAddress(val)
+	case "company", "organization":
+		runOrganization(val)
+	case "registry":
+		runRegistry(val)
+	case "plate":
+		runPlate(val)
+	case "vin":
+		runVIN(val)
+	case "wallet":
+		runWallet(val)
+	case "asn":
+		runASN(val)
 
 	// --- person research through PersonIntel ---
 	case "pi-status":
