@@ -179,6 +179,8 @@ func entityStrings(c wikiClaimMap, prop string) []string {
 }
 
 func runOrganization(query string) {
+    // A bounded one-pass pipeline: candidate -> official website -> public IP -> ASN.
+    seen := map[string]bool{}
     query=strings.TrimSpace(query)
     if len(query)<2 {warn("Enter an organization or company name");return}
     head("Organization / company")
@@ -213,7 +215,7 @@ func runOrganization(query string) {
           info("Hostname: %s",host)
           // Bounded technical pivot: only DNS resolution of a documented official website.
           // Never automatically port-scan the derived address or visit a private endpoint.
-          resolveOrgDomain(it.Label,host,link)
+          resolveOrgDomain(it.Label,host,link,seen)
         }
         for _,p:=range []struct{prop,label string}{
             {"P749","Parent entity"},{"P355","Subsidiary"},{"P159","Headquarters"},
@@ -242,20 +244,45 @@ func isPublicIP(ip net.IP) bool {
    return ip!=nil && ip.IsGlobalUnicast() && !ip.IsPrivate() && !ip.IsLoopback() &&
      !ip.IsLinkLocalUnicast() && !ip.IsLinkLocalMulticast()
 }
-func resolveOrgDomain(org,host,link string) {
-    if !strings.Contains(host,".") || strings.HasSuffix(host,".local"){return}
-    addOne(KindHost,host,"Publicly listed official website","wikidata",link)
-    store.Link(KindOrg,org,"official website",KindHost,host,EvIndication,link)
-    ips:=ipsOf(host)
-    n:=0
-    for _,raw:=range ips {
-        ip:=net.ParseIP(raw)
-        if !isPublicIP(ip){continue}
-        if n>=3{break}
+/* resolveOrgDomain performs a depth-limited technical pivot from Wikidata
+ * organizational metadata. It never scans newly discovered IPs, and never
+ * follows an identity/employee chain. Public network-only data is requested. */
+func resolveOrgDomain(org, host, link string, seen map[string]bool) {
+    if !strings.Contains(host, ".") || strings.HasSuffix(host, ".local") { return }
+    addOne(KindHost, host, "Publicly listed official website", "wikidata", link)
+    store.Link(KindOrg, org, "official website", KindHost, host, EvIndication, link)
+    if seen[host] || len(seen) >= 4 { return }
+    seen[host] = true
+    ips := ipsOf(host)
+    n := 0
+    for _, raw := range ips {
+        ip := net.ParseIP(raw)
+        if !isPublicIP(ip) { continue }
+        if n >= 3 { break }
         n++
-        addOne(KindIP,ip.String(),"DNS answer for "+host,"dns",link)
-        store.Link(KindHost,host,"DNS resolves to",KindIP,ip.String(),EvIndication,"DNS")
-        found("DNS: %s -> %s",host,ip.String())
+        addOne(KindIP, ip.String(), "Public DNS answer for " + host, "dns", link)
+        store.Link(KindHost, host, "DNS resolves to", KindIP, ip.String(), EvIndication, "DNS")
+        found("DNS: %s -> %s", host, ip.String())
+
+        // Only the first two addresses per host receive a RIPEstat ASN lookup,
+        // to keep the app usable on a small ARM64 device.
+        if n > 2 { continue }
+        endpoint := "https://stat.ripe.net/data/network-info/data.json?resource=" + url.QueryEscape(ip.String())
+        var nw struct {
+            Data struct {
+                Asns []int  `json:"asns"`
+                Prefix string `json:"prefix"`
+            } `json:"data"`
+        }
+        resp, body, err := get(client, endpoint)
+        if err != nil || resp.StatusCode != http.StatusOK || json.Unmarshal(body, &nw) != nil { continue }
+        for j, as := range nw.Data.Asns {
+            if j >= 2 || as <= 0 { break }
+            asn := fmt.Sprintf("AS%d", as)
+            addOne(KindMeta, asn, "Public routing ASN", "ripestat", endpoint)
+            store.Link(KindIP, ip.String(), "routed via", KindMeta, asn, EvIndication, endpoint)
+            found("Network: %s -> %s", ip.String(), asn)
+        }
     }
 }
 
