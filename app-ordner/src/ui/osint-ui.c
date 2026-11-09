@@ -1444,6 +1444,51 @@ static void t_large_output(void) {
     T_CHECK(st >= 0 && en <= nlines && st < en, "last section range %d..%d invalid", st, en);
 }
 
+/* Regression tests for the new category -> platform -> finding -> detail flow. */
+static void t_catalog_browser(void) {
+    t_reset();
+    push_result("# Public name search");
+    push_result("+ Donald Trump (Q22686)");
+    push_result("~ X / Twitter: https://x.com/realDonaldTrump");
+    push_result("i Source: https://www.wikidata.org/wiki/Q22686");
+    push_result("~ X / Twitter: https://x.com/realDonaldTrump");
+    push_result("~ GitHub: https://github.com/example_public");
+    push_result("! Provider rate limit");
+    T_CHECK(catalog_n==4,"expected 4 unique records, got %d",catalog_n);
+    T_CHECK(catalog_group_count(GR_X)==1,"Twitter duplicates were not merged");
+    T_CHECK(catalog_group_count(GR_GITHUB)==1,"GitHub group missing");
+    T_CHECK(catalog_category_count(CAT_PERSON)==1,"Identity record missing");
+    T_CHECK(catalog_category_count(CAT_PROFILES)==2,"Profile category count wrong");
+    T_CHECK(catalog_category_count(CAT_OTHER)==1,"Warnings should remain visible");
+    T_CHECK(catalog[1].repeats==2,"duplicate source count not preserved");
+    T_CHECK(catalog[1].source[0]!=0,"source was not attached to the record");
+
+    screen=S_RUN;
+    run_view=RV_OVERVIEW;
+    for (int i=0;i<catalog_category_total();i++)
+        if (catalog_category_at(i)==CAT_PROFILES) cat_sel=i;
+    catalog_open();
+    T_CHECK(run_view==RV_GROUPS,"categories did not open subgroup menu");
+    for (int i=0;i<catalog_group_total(CAT_PROFILES);i++)
+        if (catalog_group_at(CAT_PROFILES,i)==GR_X) group_sel=i;
+    catalog_open();
+    T_CHECK(run_view==RV_ITEMS,"subgroup did not open findings");
+    catalog_open();
+    T_CHECK(run_view==RV_DETAIL,"finding did not open source/details");
+    act_x();
+    T_CHECK(run_view==RV_ITEMS,"X should return from detail to findings");
+    act_x();
+    T_CHECK(run_view==RV_GROUPS,"X should return to group list");
+    act_x();
+    T_CHECK(run_view==RV_OVERVIEW,"X should return to categories");
+    act_x();
+    T_CHECK(screen==S_MENU,"X should return to start menu from root");
+    screen=S_RUN;
+    run_view=RV_OVERVIEW;
+    act_z();
+    T_CHECK(screen==S_MENU && quit==0,"Z Home must not quit app");
+}
+
 static int selftest(void) {
     t_menu();
     t_large_output();
@@ -1451,6 +1496,7 @@ static int selftest(void) {
     t_noinput();
     t_markers();
     t_input_editing();
+    t_catalog_browser();
     printf("osint-ui selftest: %d checks ok, %d failed\n", t_ok, t_fail);
     return t_fail == 0 ? 0 : 1;
 }
