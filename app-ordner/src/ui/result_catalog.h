@@ -16,16 +16,16 @@
 #define CAT_ROW_H 12
 
 enum {
-    CAT_PERSON, CAT_CONTACT, CAT_PROFILES, CAT_PLACES, CAT_ORGS, CAT_TECH,
+    CAT_AI, CAT_PERSON, CAT_CONTACT, CAT_PROFILES, CAT_PLACES, CAT_ORGS, CAT_TECH,
     CAT_DOCS, CAT_OTHER, CAT_NUM
 };
 static const char *const cat_titles[CAT_NUM] = {
-    "Person & identity", "Contact details", "Profiles & accounts",
+    "AI key findings", "Person & identity", "Contact details", "Profiles & accounts",
     "Places & maps", "Organizations", "Network & services",
     "Documents & sources", "Other / warnings"
 };
 enum {
-    GR_IDENT, GR_WORK, GR_PHONE, GR_EMAIL,
+    GR_AI_POINTS, GR_IDENT, GR_WORK, GR_PHONE, GR_EMAIL,
     GR_X, GR_GITHUB, GR_INSTAGRAM, GR_FACEBOOK, GR_REDDIT, GR_SOCIAL,
     GR_COORD, GR_MAP, GR_PLACE, GR_HEALTH, GR_FOOD, GR_SHOPS,
     GR_BUSINESS, GR_ORGWEB,
@@ -34,7 +34,7 @@ enum {
     GR_WARNING, GR_MISC, GR_NUM
 };
 static const char *const group_titles[GR_NUM] = {
-    "Names & identities", "Work & education", "Phone numbers", "Email addresses",
+    "Important findings", "Names & identities", "Work & education", "Phone numbers", "Email addresses",
     "X / Twitter", "GitHub", "Instagram", "Facebook", "Reddit",
     "Other social accounts", "Coordinates", "Maps & locations", "Places",
     "Clinics & healthcare", "Restaurants & cafes", "Shops & services",
@@ -44,7 +44,7 @@ static const char *const group_titles[GR_NUM] = {
     "Other references", "Warnings", "Other findings"
 };
 static const unsigned char group_cat[GR_NUM] = {
-    CAT_PERSON,CAT_PERSON,CAT_CONTACT,CAT_CONTACT,
+    CAT_AI,CAT_PERSON,CAT_PERSON,CAT_CONTACT,CAT_CONTACT,
     CAT_PROFILES,CAT_PROFILES,CAT_PROFILES,CAT_PROFILES,CAT_PROFILES,CAT_PROFILES,
     CAT_PLACES,CAT_PLACES,CAT_PLACES,CAT_PLACES,CAT_PLACES,CAT_PLACES,
     CAT_ORGS,CAT_ORGS,
@@ -60,6 +60,7 @@ typedef struct {
     char key[192];
     char section[64];
     char source[174];
+    char excerpt[300];
 } CatalogItem;
 
 static CatalogItem catalog[CAT_MAX_ITEMS];
@@ -73,6 +74,7 @@ static int catalog_has(const char *s, const char *needle) {
     return s && needle && strcasestr(s, needle) != NULL;
 }
 static int catalog_group(const char *s, const char *section, char marker) {
+    if (catalog_has(section,"AI key findings") && catalog_has(s,"AI point")) return GR_AI_POINTS;
     if (marker == '!') return GR_WARNING;
     /* Strong platform/domain patterns take precedence over generic words. */
     if (catalog_has(s,"twitter") || catalog_has(s,"x.com/")) return GR_X;
@@ -166,9 +168,11 @@ static void catalog_ingest(const char *raw) {
         return;
     }
     if (mark == 'i' && catalog_last >= 0) {
-        if (catalog_has(label,"source:") || catalog_has(label,"http") ||
-            catalog_has(label,"based on")) {
-            CatalogItem *e = &catalog[catalog_last];
+        CatalogItem *e = &catalog[catalog_last];
+        if (catalog_has(label,"excerpt:")) {
+            snprintf(e->excerpt,sizeof e->excerpt,"%s",label);
+        } else if (catalog_has(label,"source:") || catalog_has(label,"http") ||
+                   catalog_has(label,"based on")) {
             if (!e->source[0]) snprintf(e->source,sizeof e->source,"%s",label);
         }
         return;
@@ -367,11 +371,12 @@ static void catalog_draw_detail(void) {
     if (id<0){catalog_draw_items();return;}
     const CatalogItem *e=&catalog[id];
     title("Finding details");
-    char combined[700];
-    snprintf(combined,sizeof combined,"%s\n\nCategory: %s\nGroup: %s\nStatus: %s\nFound in: %s\n%s%s%s",
+    char combined[1000];
+    snprintf(combined,sizeof combined,"%s\n\nCategory: %s\nGroup: %s\nStatus: %s\nFound in: %s\n%s%s\n%s%s%s",
         e->label,cat_titles[group_cat[e->group]],group_titles[e->group],
         e->mark=='='?"Reviewed":e->mark=='!'?"Warning":e->mark=='?'?"Unverified":"Source indication",
         e->section[0]?e->section:"Search output",
+        e->excerpt[0]?"\n":"",e->excerpt,
         e->source[0]?"Source / context:\n":"",
         e->source[0]?e->source:"",
         e->repeats>1?"\nRepeated results were merged.":"");
