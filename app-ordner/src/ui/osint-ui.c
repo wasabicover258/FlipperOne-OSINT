@@ -991,8 +991,15 @@ static void on_drag(int py, int down) {
     if (!drag_active || screen != S_RUN) return;
     drag_acc += drag_last_y - y;
     drag_last_y = y;
-    while (drag_acc >= CH) { scroll_by(1); drag_acc -= CH; }
-    while (drag_acc <= -CH) { scroll_by(-1); drag_acc += CH; }
+    const int step = run_view == RV_FULL ? CH : CAT_ROW_H;
+    while (drag_acc >= step) {
+        if (run_view == RV_FULL) scroll_by(1); else catalog_move(1);
+        drag_acc -= step;
+    }
+    while (drag_acc <= -step) {
+        if (run_view == RV_FULL) scroll_by(-1); else catalog_move(-1);
+        drag_acc += step;
+    }
 }
 
 static void on_wheel(int dy) {
@@ -1643,6 +1650,8 @@ static int screenshot(const char *dir) {
         {"1-menu-top", S_MENU}, {"2-menu-person", S_MENU}, {"3-input", S_INPUT},
         {"4-confirm", S_CONFIRM}, {"5-confirm-ready", S_CONFIRM}, {"6-results", S_RUN},
         {"7-overview", S_RUN},
+        {"8-menu-buttons", S_MENU},
+        {"9-category-buttons", S_RUN},
     };
     for (size_t i = 0; i < sizeof shots / sizeof shots[0]; i++) {
         t_reset();
@@ -1650,6 +1659,19 @@ static int screenshot(const char *dir) {
         if (strcmp(shots[i].name, "2-menu-person") == 0) {
             sel = 7; /* Person: username */
             menu_sync_view();
+        } else if (strcmp(shots[i].name, "8-menu-buttons") == 0) {
+            sel = 1; /* bordered white row, followed by inverted black row */
+            menu_sync_view();
+        } else if (strcmp(shots[i].name, "9-category-buttons") == 0) {
+            push_result("# AI key findings");
+            push_result("? AI point 1: Sample PDF reference");
+            push_result("i Source: https://example.org/public.pdf");
+            push_result("# Nearby facilities and businesses");
+            push_result("+ Clinic: Example Clinic (15m)");
+            push_result("+ Restaurant: Example Cafe (30m)");
+            push_result("+ Business phone: +49 89 12345");
+            finished = finished_seen = 1;
+            run_view = RV_OVERVIEW;
         } else if (shots[i].scr == S_INPUT) {
             mode_idx = 8; /* Person: email */
             strcpy(inputs[mode_idx], "erika@example.org");
