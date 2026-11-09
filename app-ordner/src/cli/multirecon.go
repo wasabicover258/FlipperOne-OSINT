@@ -106,44 +106,54 @@ func runGPS(input string) {
     lat,lon,err:=parseGPS(input)
     if err!=nil {warn("GPS: %v",err);return}
     position:=fmt.Sprintf("%.6f, %.6f",lat,lon)
-    head("Coordinates: %s",position)
+    head("Location: %s",position)
     osmURL:=fmt.Sprintf("https://www.openstreetmap.org/?mlat=%.6f&mlon=%.6f#map=16/%.6f/%.6f",lat,lon,lat,lon)
     found("Map: %s",osmURL)
     addOne(KindMeta,position,"Geographic coordinate","input",osmURL)
+
+    // Reverse geocoding alone is NOT nearby place discovery. At zoom 18
+    // it can suggest a named building, but may also return a street.
     var hit osmHit
     q:=url.Values{"format":{"jsonv2"},"lat":{strconv.FormatFloat(lat,'f',6,64)},
-      "lon":{strconv.FormatFloat(lon,'f',6,64)},"zoom":{"14"},"addressdetails":{"0"}}
+      "lon":{strconv.FormatFloat(lon,'f',6,64)},"zoom":{"18"},"addressdetails":{"0"}}
     if err:=osmRequest("https://nominatim.openstreetmap.org/reverse",q,&hit);err!=nil {
-      warn("OSM reverse-geocoding unavailable: %v",err);return
+      warn("OSM reverse label unavailable: %v",err)
+    } else if hit.DisplayName!="" {
+      found("Closest mapped feature: %s",shorten(hit.DisplayName,140))
+      info("OSM tag: %s / %s",hit.Category,hit.Type)
+      info("Source: OpenStreetMap contributors / Nominatim")
     }
-    if hit.DisplayName!="" {
-      found("Public map label: %s",shorten(hit.DisplayName,140))
-      info("OSM category: %s / %s",hit.Category,hit.Type)
-      info("Source: OpenStreetMap contributors (Nominatim)")
-      // No occupants, household members, home ownership or contact lookup.
-    }
+    // Independent radius search runs even when reverse geocoding fails.
+    showNearbyPlaces(lat,lon,nearbyRadiusMeters,"")
 }
 
 func runAddress(input string) {
     if len(strings.TrimSpace(input))<4 {warn("Enter an address or public place name");return}
-    head("Geographic lookup")
-    info("Public map features only: no residents or property-owner lookup.")
+    head("Address / place search")
+    info("Public map features only; no resident or owner lookup.")
     q:=url.Values{"q":{input},"format":{"jsonv2"},"limit":{"3"},"addressdetails":{"0"}}
     var hits []osmHit
     if err:=osmRequest("https://nominatim.openstreetmap.org/search",q,&hits);err!=nil {
-      warn("OSM geocoding unavailable: %v",err);return
+      warn("OSM address geocoding unavailable: %v",err);return
     }
     if len(hits)==0 {miss("No public map match found");return}
+    // Display multiple candidates, but use only one center for a single
+    // bounded nearby POI request, instead of spamming the shared API.
+    pivoted:=false
     for _,h:=range hits {
       lat,errLat:=strconv.ParseFloat(h.Lat,64)
       lon,errLon:=strconv.ParseFloat(h.Lon,64)
       if errLat!=nil||errLon!=nil {continue}
       label:=fmt.Sprintf("%.6f, %.6f",lat,lon)
-      found("%s",shorten(h.DisplayName,130))
+      found("Place candidate: %s",shorten(h.DisplayName,130))
       info("Coordinates: %s | %s/%s",label,h.Category,h.Type)
       src:=fmt.Sprintf("https://www.openstreetmap.org/?mlat=%.6f&mlon=%.6f",lat,lon)
       info("Source: %s",src)
-      addOne(KindMeta,label,"Public OSM feature","openstreetmap",src)
+      addOne(KindMeta,label,"Public OSM map feature","openstreetmap",src)
+      if !pivoted {
+         pivoted=true
+         showNearbyPlaces(lat,lon,nearbyRadiusMeters,"")
+      }
     }
 }
 
@@ -227,15 +237,23 @@ func runOrganization(query string) {
       }
       if len(search.Search)==0 {miss("No matching Wikidata entry")}
     }
-    // Second, independent public-source route: business/place records in OSM.
+    // Independent public-place route. Search exact organization name
+    // via Nominatim and verify candidate facilities in a bounded radius.
     var osm []osmHit
     if err:=osmRequest("https://nominatim.openstreetmap.org/search",
       url.Values{"q":{query},"format":{"jsonv2"},"limit":{"2"},"addressdetails":{"0"}},&osm);err==nil {
+        pivoted:=false
         for _,place:=range osm {
-           if place.Name!=""{found("OSM place candidate: %s",place.Name)}
+           if place.Name!=""{found("OSM business candidate: %s",place.Name)}
            info("OSM: %s (%s)",shorten(place.DisplayName,110),place.Type)
-           if place.Name!="" {addOne(KindOrg,place.Name,"OSM place candidate","openstreetmap",
+           if place.Name!="" {addOne(KindOrg,place.Name,"OSM business candidate","openstreetmap",
              "https://www.openstreetmap.org/search?query="+url.QueryEscape(place.Name))}
+           lat,e1:=strconv.ParseFloat(place.Lat,64)
+           lon,e2:=strconv.ParseFloat(place.Lon,64)
+           if !pivoted && e1==nil && e2==nil {
+               pivoted=true
+               showNearbyPlaces(lat,lon,nearbyRadiusMeters,query)
+           }
         }
     } else {warn("OSM organization search unavailable: %v",err)}
 }
