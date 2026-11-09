@@ -283,7 +283,7 @@ func runPIStatus() {
 	if err != nil {
 		warn("PersonIntel bridge not available: %v", err)
 		info("%s", bridgeRequirement)
-		info("The infrastructure modules (domain, IP, email, username, phone) work without it.")
+		info("The infrastructure modules (domain, IP, email, username, phone) keep working without it.")
 		return
 	}
 	defer b.close()

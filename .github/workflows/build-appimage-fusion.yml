@@ -186,27 +186,44 @@ jobs:
           CLI=squashfs-root/usr/bin/osint-cli
           command -v personintel-cli && { echo "ERROR: an installed PersonIntel would mask the bundle" >&2; exit 1; } || true
 
-          echo "--- module status from the bundle"
-          $CLI pi-status x | tee /tmp/pi.txt | head -6
+          # The device situation: the bundle is pure Python, so 'cryptography' and
+          # 'phonenumbers' are NOT there. The runner's system Python has them (the test step
+          # installed them), so they are hidden behind stubs - otherwise this step would test
+          # a setup the device never has.
+          STUB=$(mktemp -d)
+          for m in cryptography phonenumbers; do
+            mkdir -p "$STUB/$m"
+            echo "raise ImportError('not available on the device')" > "$STUB/$m/__init__.py"
+          done
+          export PYTHONPATH="$STUB"
+
+          echo "--- module status from the bundle (device situation: no cryptography)"
+          $CLI pi-status x > /tmp/pi.txt; head -8 /tmp/pi.txt
           grep -q 'bundled PersonIntel' /tmp/pi.txt || { echo "ERROR: the bundled copy was not used" >&2; exit 1; }
           grep -q 'of 10 person modules' /tmp/pi.txt || { echo "ERROR: module status missing" >&2; exit 1; }
-          grep -q 'No encrypted credential store' /tmp/pi.txt || { echo "ERROR: missing note about the credential store" >&2; exit 1; }
+          grep -q 'No encrypted credential store' /tmp/pi.txt \
+            || { echo "ERROR: without cryptography the app must say the credential store is unavailable" >&2; exit 1; }
+          grep -q 'PERSONINTEL_PIPL_API_KEY' /tmp/pi.txt \
+            || { echo "ERROR: the environment-variable route for keys is not named" >&2; exit 1; }
+          # Every module that is not ready has to name its prerequisite - nothing is simulated.
+          test "$(grep -c 'needs:' /tmp/pi.txt)" -ge 8 \
+            || { echo "ERROR: modules without a prerequisite line" >&2; exit 1; }
 
           echo "--- a query without a documented purpose must be blocked"
-          $CLI person-username testuser confirm | tee /tmp/a.txt | head -3
+          $CLI person-username testuser confirm > /tmp/a.txt; head -3 /tmp/a.txt
           grep -q 'No valid research purpose' /tmp/a.txt || { echo "ERROR: query ran without a purpose" >&2; exit 1; }
 
           echo "--- documenting a purpose"
-          $CLI pi-case "Verifikation einer Quelle fuer einen Artikel ueber Foerdermittel" | tee /tmp/b.txt | head -3
+          $CLI pi-case "Verifikation einer Quelle fuer einen Artikel ueber Foerdermittel" > /tmp/b.txt; head -3 /tmp/b.txt
           grep -q 'Purpose documented' /tmp/b.txt || { echo "ERROR: purpose was not accepted" >&2; exit 1; }
 
           echo "--- an active check without confirmation must be refused"
-          $CLI person-username testuser | tee /tmp/c.txt | head -4
+          $CLI person-username testuser > /tmp/c.txt; head -4 /tmp/c.txt
           grep -qi 'est.*tigung erforderlich' /tmp/c.txt || { echo "ERROR: active check ran unconfirmed" >&2; exit 1; }
           grep -q 'No module could run this query' /tmp/c.txt || { echo "ERROR: something ran anyway" >&2; exit 1; }
 
           echo "--- with confirmation it runs and the finding carries source and evidence level"
-          $CLI person-username testuser confirm | tee /tmp/d.txt | head -12
+          $CLI person-username testuser confirm > /tmp/d.txt; head -12 /tmp/d.txt
           grep -q 'module(s) ran: sherlock' /tmp/d.txt || { echo "ERROR: the confirmed query did not run" >&2; exit 1; }
           grep -q '^~ ' /tmp/d.txt || { echo "ERROR: no finding with an evidence level" >&2; exit 1; }
           grep -q 'sherlock 0.16.0' /tmp/d.txt || { echo "ERROR: the source does not name the tool version" >&2; exit 1; }
@@ -214,6 +231,25 @@ jobs:
 
           echo "--- the infrastructure modules are untouched"
           $CLI phone "0171 1234567" | grep -q '+491711234567' || { echo "ERROR: phone module changed" >&2; exit 1; }
+          # A device without any python3: no bundle path, no interpreter. The person modules
+          # must then name the prerequisite, and the infrastructure modules must still work.
+          ( unset APPDIR; PATH=/nonexistent $CLI pi-status x > /tmp/nobridge.txt ) || true
+          grep -q 'not available' /tmp/nobridge.txt \
+            || { echo "ERROR: a missing bridge was not reported" >&2; exit 1; }
+          grep -q 'keep working without it' /tmp/nobridge.txt \
+            || { echo "ERROR: missing note that the other modules still work" >&2; exit 1; }
+          grep -q 'no python3 was found' /tmp/nobridge.txt \
+            || { echo "ERROR: the missing interpreter is not named" >&2; exit 1; }
+          PATH=/nonexistent $CLI phone "0171 1234567" | grep -q 'Germany' \
+            || { echo "ERROR: a missing interpreter blocked an infrastructure module" >&2; exit 1; }
+
+          echo "--- desktop situation: with cryptography the store is locked until unlocked"
+          unset PYTHONPATH
+          PERSONINTEL_DATA_DIR=$(mktemp -d) $CLI pi-status x > /tmp/pi2.txt; head -6 /tmp/pi2.txt
+          grep -q 'of 10 person modules' /tmp/pi2.txt || { echo "ERROR: module status missing" >&2; exit 1; }
+          grep -q 'Credential store locked' /tmp/pi2.txt \
+            || { echo "ERROR: with cryptography present the store must be reported as locked" >&2; exit 1; }
+          export PYTHONPATH="$STUB"
 
           echo "--- no process is left behind"
           sleep 1
