@@ -143,6 +143,11 @@ jobs:
         run: |
           curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-aarch64.AppImage
           chmod +x appimagetool
+          # DIAGNOSE 1.4.6-diag: die bekannt lauffaehige Oberflaeche aus dem 1.3.0-Bundle
+          # mitnehmen. Kein Neubau - genau das Binary, das im Emulator nachweislich startet.
+          ./DevBuilds/FlipperOne-OSINT-1.3.0-aarch64.AppImage --appimage-extract >/dev/null
+          cp squashfs-root/usr/bin/osint-ui "$APPDIR/usr/bin/osint-ui-130"
+          rm -rf squashfs-root
           chmod +x "$APPDIR/AppRun" "$APPDIR/usr/bin/"*
           # The shelf shows app.toml's name. Keep it in step with VERSION, otherwise two
           # different builds appear under the same name and cannot be told apart.

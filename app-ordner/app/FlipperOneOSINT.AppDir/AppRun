@@ -1,39 +1,53 @@
 #!/bin/sh
 # FlipperOne-OSINT: native UI (SDL2) + backend (osint-cli) from the same bundle.
+#
+# DIAGNOSE (1.4.6-diag): zeigt zuerst 25 Sekunden lang die bekannt lauffaehige
+# Oberflaeche aus 1.3.0, danach die neue. Erscheint das alte Menue, laeuft AppRun
+# und der Fehler steckt allein in der neuen osint-ui. Bleibt der Bildschirm leer,
+# wird AppRun gar nicht ausgefuehrt.
 set -eu
 APPDIR=${APPDIR:-$(cd "$(dirname "$0")" && pwd)}
 export APPDIR
 
-# Where a start log can be read from outside on a Flipper One: the File Manager shows
-# /home/user/Files. Fall back to the bundle's own folder, then to the temp folder.
 SHARE=""
-for d in /home/user/Files "$(dirname "${APPIMAGE:-$0}")"; do
+for d in /home/user/Files "$(dirname "${APPIMAGE:-$0}")" "${TMPDIR:-/tmp}"; do
     if [ -d "$d" ] && { : > "$d/.osint-write-test"; } 2>/dev/null; then
         rm -f "$d/.osint-write-test" 2>/dev/null || true
-        SHARE="$d"
-        break
+        SHARE="$d"; break
     fi
 done
 [ -n "$SHARE" ] && echo "AppRun reached: $(date 2>&1)" > "$SHARE/flipperone-osint-start.log" 2>/dev/null || true
 
-# Outside the panel: hand the bundle to flipctl like a real Flipper app.
 if [ -z "${FLIPCTL_HOSTED:-}" ]; then
     exec flipctl open "${APPIMAGE:-$0}"
 fi
 
 LOG="${TMPDIR:-/tmp}/flipperone-osint.log"
-{ [ -f "$LOG" ] && [ "$(wc -c < "$LOG")" -gt 100000 ] && : > "$LOG"; } 2>/dev/null || true
+: > "$LOG" 2>/dev/null || true
 {
-  echo "== $(date) Start AppRun"
-  echo "HOSTED=${FLIPCTL_HOSTED:-} WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-} DISPLAY=${DISPLAY:-} XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-} SDL_VIDEODRIVER=${SDL_VIDEODRIVER:-}"
+  echo "== $(date) Start AppRun (1.4.6-diag)"
+  echo "HOSTED=${FLIPCTL_HOSTED:-} WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-} DISPLAY=${DISPLAY:-} XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-}"
   echo "APPIMAGE=${APPIMAGE:-?} APPDIR=$APPDIR arch=$(uname -m 2>&1) share=${SHARE:-none}"
-  echo "python3: $(command -v python3 2>&1 || echo 'not found')"
-  echo "python3 version: $(python3 -V 2>&1 || echo '-')"
+  echo "python3: $(command -v python3 2>&1 || echo 'not found') / $(python3 -V 2>&1 || echo '-')"
   ls -l "$APPDIR/usr/bin" 2>&1
 } >> "$LOG" 2>&1 || true
 
-# Not exec: the exit code is what tells a failing start from a normal one.
 set +e
+# Schritt 1: alte Oberflaeche, sichtbares Lebenszeichen von AppRun
+if [ -x "$APPDIR/usr/bin/osint-ui-130" ]; then
+    echo "-- Start osint-ui-130 (1.3.0) fuer 25 s" >> "$LOG" 2>&1
+    "$APPDIR/usr/bin/osint-ui-130" "$APPDIR/usr/bin/osint-cli" >> "$LOG" 2>&1 &
+    legacy=$!
+    i=0
+    while [ "$i" -lt 25 ] && kill -0 "$legacy" 2>/dev/null; do sleep 1; i=$((i+1)); done
+    kill "$legacy" 2>/dev/null
+    wait "$legacy" 2>/dev/null
+    echo "-- osint-ui-130 beendet" >> "$LOG" 2>&1
+    [ -n "$SHARE" ] && cp "$LOG" "$SHARE/flipperone-osint-start.log" 2>/dev/null
+fi
+
+# Schritt 2: neue Oberflaeche
+echo "-- Start osint-ui (neu)" >> "$LOG" 2>&1
 "$APPDIR/usr/bin/osint-ui" "$APPDIR/usr/bin/osint-cli" >> "$LOG" 2>&1
 rc=$?
 set -e
