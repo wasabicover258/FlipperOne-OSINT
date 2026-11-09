@@ -19,7 +19,11 @@ import (
     "time"
 )
 
-const overpassEndpoint = "https://overpass-api.de/api/interpreter"
+// Separate public OpenStreetMap query services, not Google Maps scraping.
+// Private.coffee is an established nonprofit Overpass provider (2026).
+// If one service is overloaded, retry only once against a different host.
+const overpassEndpoint = "https://overpass.private.coffee/api/interpreter"
+const overpassFallbackEndpoint = "https://overpass-api.de/api/interpreter"
 const nearbyRadiusMeters = 500
 const nearbyResultLimit = 28
 const nearbyResponseLimit = 2 * 1024 * 1024
@@ -240,6 +244,17 @@ func queryNearbyPlaces(c *http.Client, endpoint string, lat,lon float64,radius i
     return parseNearbyResults(body,lat,lon,radius)
 }
 
+// Each endpoint is given a strict per-request timeout and is tried only once.
+// No parallel duplicate queries: preserve provider capacity and user privacy.
+func nearbyWithFallback(c *http.Client,primary,secondary string,lat,lon float64,radius int)([]nearbyPlace,error){
+    places,err:=queryNearbyPlaces(c,primary,lat,lon,radius)
+    if err==nil{return places,nil}
+    if secondary=="" || secondary==primary {return nil,err}
+    places,fallbackErr:=queryNearbyPlaces(c,secondary,lat,lon,radius)
+    if fallbackErr==nil{return places,nil}
+    return nil,fmt.Errorf("primary POI service: %v; fallback: %v",err,fallbackErr)
+}
+
 func likelyPublicBusinessEmail(v string) bool {
     v=strings.TrimSpace(v)
     return len(v)<140 && !strings.ContainsAny(v,"\r\n \t<>") && strings.Count(v,"@")==1
@@ -309,8 +324,8 @@ func reportNearbyPlace(p nearbyPlace, enrichDomain bool,seen map[string]bool) {
 func showNearbyPlaces(lat,lon float64,radius int,nameFilter string) int {
     head("Nearby facilities and businesses (%dm)",radius)
     info("Source: OpenStreetMap / Overpass; public listings may be incomplete.")
-    cli:=&http.Client{Timeout:18*time.Second}
-    places,err:=queryNearbyPlaces(cli,overpassEndpoint,lat,lon,radius)
+    cli:=&http.Client{Timeout:11*time.Second}
+    places,err:=nearbyWithFallback(cli,overpassEndpoint,overpassFallbackEndpoint,lat,lon,radius)
     if err!=nil{
         warn("Nearby search unavailable: %v",err)
         info("Try again later; community Overpass servers can be busy.")
