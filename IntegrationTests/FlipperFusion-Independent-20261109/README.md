@@ -13,7 +13,7 @@ Beide Builds verwenden **denselben Compiler, dasselbe appimagetool, dieselben Ei
 
 - `build_arm64.sh`: reproduzierbarer Doppelbuild für ARM64. Erstellt zwei neue AppImages unter `artifacts/` und SHA-256-Dateien.
 - `EMULATOR_TEST.md`: kontrollierter A/B-Test mit identischem Installationsweg und Neustartbedingung.
-- `.github/workflows/experiment-isolated-fusion.yml`: separater ARM64-CI-Workflow für **nur diesen** Experiment-Branch, mit Artefakt-Upload; überschreibt keine Dateien unter `DevBuilds/`, `Public Releases/` oder auf `main`.
+- `.github/workflows/experiment-flipper-fusion-ab.yml`: separater ARM64-CI-Workflow für **nur diesen** Experiment-Branch, mit Artefakt-Upload; überschreibt keine Dateien unter `DevBuilds/`, `Public Releases/` oder auf `main`.
 
 ## Abgrenzung
 
