@@ -1,74 +1,97 @@
-# CONTINUE_DEVELOPMENT – PersonIntel (Zwischenstand)
+# PersonIntel – Stand der Entwicklung
 
-Stand: 2026-11-08, Sicherung wegen des erreichten Nutzungslimits. **Das ist ein Zwischenstand, keine fertige Version.**
+Letzte Aktualisierung: 2026-11-09. Der am 08.11. gesicherte Zwischenstand ist inzwischen
+**fertiggestellt**. Diese Datei beschreibt den aktuellen Stand, was belegt ist, was nicht, und
+woran weitergearbeitet werden kann.
 
-## Wo liegt was
-
-| Was | Wert |
+| | |
 |---|---|
 | Repo | `wasabicover258/FlipperOne-OSINT` |
-| Branch | `dev/personintel-wip` (neu angelegt; `main` und alle vorhandenen Dateien/AppImages sind unverändert) |
-| Basis auf `main` | `4f938ade2339da5d0403b17d5fa9ab3752bbd95d` ("DevBuild AppImage 1.3.0 (aarch64)") |
-| Commit-SHA des Code-Snapshots | `e5695f3` ("PersonIntel WIP: Kern, zehn Adapter, Graph, Berichte, Austausch, Tests"); darauf folgt ein zweiter Commit, der nur diese Datei um die SHA ergänzt |
-| Projektordner | `PersonIntel/` (eigenständig; berührt `app-ordner/`, `DevBuilds/*.AppImage`, `Public Releases/` nicht) |
+| Branch | `dev/personintel-wip` (`main` und alle vorhandenen AppImages unverändert) |
+| Projektordner | `PersonIntel/` |
+| Umfang | ~7.800 Zeilen Code, 166 Tests, alle grün |
+| Einstieg | `cd PersonIntel && pip install -e '.[dev,ui]' && python -m pytest -q` |
 
-Hinweis: PersonIntel ist ein **eigenes Projekt** (Python/PySide6, Linux-Desktop, Personenrecherche mit Zweckprüfung). Es liegt nur deshalb in diesem Repo, weil hier `DevBuilds/` existiert und dies das einzige angebundene Repo war. Die README von FlipperOne-OSINT schließt personenbezogene Dienste (Pipl, Spokeo, ShadowDragon, Babel Street, Mr.Holmes) für die Flipper-App bewusst aus – falls PersonIntel ein eigenes Repo bekommen soll, `PersonIntel/` einfach dorthin verschieben (`git subtree split` oder Kopie).
+Hinweis zum Ablageort: PersonIntel ist ein **eigenes Projekt** (Linux-Desktop, Python/PySide6) und
+liegt nur deshalb hier, weil dies das einzige angebundene Repository mit `DevBuilds/` war. Die
+README von FlipperOne-OSINT schließt personenbezogene Dienste für die Flipper-App ausdrücklich
+aus. Für ein eigenes Repository genügt es, den Ordner `PersonIntel/` zu verschieben.
 
-## Auftrag (Kurzfassung)
+## Fertig und geprüft
 
-Eigenständiges, modulares Linux-Desktop-OSINT-Modul für journalistische Personenrecherche, später mit einem bestehenden System-OSINT-Programm verschmelzbar. Zehn Adapter: Holehe, Mosint, Sherlock, PhoneInfoga, Ignorant, Mr.Holmes, Pipl, Spokeo, ShadowDragon, Babel Street. Pflicht: Belegstufen (unmittelbar belegt / Indiz / unbestätigt), Zweck- und Berechtigungsprüfung je Fall, aktive Prüfungen nur mit gesonderter Bestätigung, lokale (optional verschlüsselte) Speicherung, keine Leak-Passwörter, keine erfundenen Ergebnisse/Endpunkte. Lieferumfang: lauffähiger Code, Tests, Installationsanleitung, AppImage-Buildskript (x86_64 und ARM64), technische Fusionsanleitung. Antworten/UI auf Deutsch.
+* **Kern:** Modelle mit versioniertem Ergebnisformat, strikte Eingabevalidierung (genau eine
+  Kennung, E.164), Einstellungen, Engine-Fassade, Jobverwaltung, Plugin-Registry.
+* **Recherchekontrolle:** dokumentierter, befristeter Zweck pro Fall; HMAC-signierte
+  Autorisierungen; Trennung passiv/aktiv mit Pflichtbestätigung je aktiver Abfrage; Fallumfang,
+  Tagesbudget, Mindestabstand; hash-verkettetes Protokoll ohne Kennungen im Klartext.
+* **Speicher:** SQLite mit Migrationen, nachträgliche Verschlüsselung, gezieltes Löschen,
+  verschlüsselter Zugangsdatenspeicher (oder System-Schlüsselbund, oder Umgebungsvariablen).
+* **Alle zehn Adapter** mit der geforderten Schnittstelle, transparentem Status und konkreten
+  Voraussetzungen. ShadowDragon und Babel Street melden „nicht verfügbar (Anbieterzugang)“ –
+  ohne erfundene Endpunkte oder Ergebnisse.
+* **Graph, Berichte** (Markdown/HTML/JSON/PDF), **JSON-Austauschformat** mit Versionsprüfung und
+  ID-Neuvergabe, **CLI** (headless), **PySide6-Oberfläche** mit acht Seiten.
+* **AppImage:** Rezept und Buildskript nach den im Quellcode von python-appimage belegten
+  Konventionen; Architekturabbruch und Überschreibverbot getestet.
+* **Dokumentation:** `PersonIntel/README.md`, `docs/INSTALL.md`, `docs/ARCHITECTURE.md`,
+  `docs/FUSION.md`. Ein Test prüft die Dokumentation gegen den Code (API-Namen,
+  Aufzählungswerte, Austauschformat, Installationsbefehle).
 
-## Bereits erledigt (alles unter `PersonIntel/src/personintel/`)
+Belegt durch: 166 Tests, ein Ende-zu-Ende-Durchlauf im installierten Paket (Zweckverweigerung,
+Abfrage gegen Werkzeug-Attrappe, Prüfvermerk, Graphregel, Bericht, Export/Import,
+Protokollintegrität) sowie Installation in eine frische Umgebung mit beiden Startbefehlen.
 
-- `core/`: Fehler, IDs (präfixiert), Modelle + versioniertes Ergebnisformat, Validierung (genau eine Kennung, E.164), Einstellungen/Pfade, Plugin-Registry (`plugins.py`), Job-Verwaltung (`jobs.py`), Engine-Fassade (`engine.py`).
-- `security/`: Autorisierungs-Gate mit HMAC-signierten `AuthorizedQuery` (`authorization.py`), Hash-verketteter Audit-Log ohne Klartext-Kennungen (`audit.py`), Feldverschlüsselung (`crypto.py`), Credential-Store (`credentials.py`).
-- `storage/`: SQLite mit Migrationen und optionaler Verschlüsselung, selektives Löschen (`repository.py`, `migrations.py`).
-- `adapters/`: alle zehn Adapter mit der geforderten Schnittstelle. Lokale Tools: Holehe, Sherlock, Mosint, PhoneInfoga, Ignorant; Mr.Holmes (Installationserkennung + Berichtsimport); Pipl und Spokeo (HTTP-API); ShadowDragon und Babel Street (nur Konfiguration/Status, Recherche bewusst "nicht verfügbar" – keine öffentliche API-Doku).
-- `graph/model.py` (nur manuelle, belegte Kanten; `same_person` nicht allein per Benutzername), `reports/export.py` (Markdown/HTML/JSON), `exchange/schema.py` (JSON-Export/-Import mit Versionsprüfung und ID-Neuvergabe), `api.py` (stabile Fassade), `cli.py` (status, cases, audit-verify, export, import, report), `__main__.py` (startet `personintel.ui.app.run`, **existiert noch nicht**).
-- Tests: `tests/conftest.py` (Attrappen-Tools + lokaler Anbieter-HTTP-Server), `tests/test_authorization.py` (13), `tests/test_adapters_local.py` (13). **Stand: `cd PersonIntel && python -m pytest -q` → 26 passed** (Python 3.13, cryptography, phonenumbers, pytest).
+## Nicht belegt (fehlende Voraussetzungen, nicht fehlende Umsetzung)
 
-## Was getestet ist – und was nicht (ehrlich)
+1. **Lauf gegen die echten Werkzeuge.** holehe, mosint, sherlock, phoneinfoga und ignorant waren
+   nicht installiert. Getestet wurde gegen ausführbare Attrappen mit den dokumentierten
+   Ausgabeformaten. Besonders zu prüfen: das JSON-Schema von Mosint und die Textausgabe der
+   PhoneInfoga-CLI – beide sind nicht formal spezifiziert.
+2. **Echte Abfragen bei Pipl und Spokeo** (Vertrag, kostenpflichtig). Getestet gegen einen lokalen
+   HTTP-Server mit dem dokumentierten Antwortformat.
+3. **Der AppImage-Bau selbst.** Er lädt ein Python-Basisimage über die GitHub-Release-API; dieser
+   Zugriff war in der Entwicklungsumgebung gesperrt (HTTP 403). Geprüft sind Rezept, Platzhalter,
+   Architekturabbruch und Überschreibverbot – nicht der Bau.
+4. **Mr.Holmes-Berichte echter Installationen**: der Import ist gegen die Textstruktur geprüft,
+   nicht gegen alle Berichtsvarianten.
 
-- Getestet gegen **Attrappen-Skripte**, die das dokumentierte Ausgabeformat nachbilden (Holehe-CSV, Sherlock-CSV, Mosint-JSON, PhoneInfoga-CLI und -REST). Die **echten Tools waren im Sandkasten nicht installiert** und sind noch nie gelaufen.
-- Ignorant: nur Normalisierung/Rate-Limit-Logik getestet; der Hilfsprozess (`RUNNER_SOURCE`, braucht `ignorant`, `httpx`, `trio`) ist ungetestet.
-- Pipl/Spokeo: Code vorhanden, Tests mit lokalem Fake-Server (`FakeVendorServer` in `conftest.py` ist vorbereitet) **noch nicht geschrieben**; echte Anbieter nie angesprochen.
-- PhoneInfoga-POST-Schema nicht verifiziert → nur belegte GET-Endpunkte (`/api/v2/scanners`, `scan/local`, `scan/googlesearch`) plus CLI-Fallback.
-- UI: **nicht begonnen.** AppImage: **nicht gebaut.**
+## Nächste Schritte
 
-## Flipper-One-Emulator-Tests – Stand
+1. Auf einem Rechner mit den echten Werkzeugen: `personintel-cli status`, dann je Modul eine
+   Abfrage gegen eine eigene Kennung. Abweichungen im Ausgabeformat im jeweiligen Adapter
+   (`src/personintel/adapters/<modul>.py`, Methode `normalize_results`) anpassen.
+2. AppImage bauen: `pip install python-appimage && apt-get install -y file`, dann
+   `PersonIntel/packaging/build_appimage.sh`. Ergebnis landet unter neuem Versionsnamen in
+   `DevBuilds/`; bestehende Dateien werden nie überschrieben. ARM64 nur auf ARM64-Hardware oder
+   per `docker run --platform linux/arm64` (Befehl steht in `docs/INSTALL.md`).
+3. Vor einer Veröffentlichung: Version in `src/personintel/__init__.py` erhöhen.
+4. Bei vorliegender Anbieterdokumentation ShadowDragon/Babel Street vervollständigen – nötig sind
+   nur `execute_authorized_query` und `normalize_results`; Anleitung in `docs/ARCHITECTURE.md`
+   unter „Neuen Anbieter anbinden“.
+5. Für die Verschmelzung mit der bestehenden System-OSINT-Anwendung: `docs/FUSION.md`
+   (Paket-API `personintel.api`, Austauschformat `personintel.case` 1.0, Entry-Points
+   `personintel.adapters` / `personintel.ui_pages`, Einbettung einzelner Oberflächenseiten).
 
-- In dieser Sitzung wurden **keine** Flipper-One-Emulator-Tests ausgeführt, und es gibt dazu keine Ergebnisse, Logs oder Notizen, die ich dokumentieren könnte. Ich erfinde hier nichts.
-- Auf dem GitHub-Konto existiert `wasabicover258/Flipper-Emulator` (zuletzt gepusht 2026-11-08 12:36 UTC); es war in dieser Sitzung **nicht angebunden und nicht gelesen**. Der Stand der Emulator-Tests muss dort bzw. in `FlipperOne-OSINT` (`VERSIONS.md`, Workflow `.github/workflows/build-appimage.yml`) nachgesehen werden.
-- Vorhandene FlipperOne-OSINT-AppImages (aarch64, 0.1.1 … 1.3.0) wurden **nicht verändert**.
-- Nächste Testschritte (Vorschlag, noch nicht durchgeführt): (1) in `Flipper-Emulator` nachsehen, welche Tests/Ergebnisse es für FlipperOne-OSINT 1.3.0 gibt; (2) klären, ob PersonIntel überhaupt auf Flipper One laufen soll (PySide6 + Qt ist für das kleine Display und ARM64-AppImage schwergewichtig; die Flipper-App ist bewusst Go+SDL2); (3) falls ja: ARM64-AppImage von PersonIntel bauen (siehe unten) und im Emulator starten, Startlog prüfen; (4) falls nein: PersonIntel nur auf Linux-Desktop (x86_64/ARM64) testen.
+## Flipper-One-Emulator-Tests
 
-## Offene Punkte / bekannte Lücken
+Hierzu gibt es **keinen Stand**: in diesen Sitzungen wurden keine Emulator-Tests ausgeführt, und
+es liegen keine Ergebnisse oder Logs vor. Das Repository `wasabicover258/Flipper-Emulator` war
+nicht angebunden und wurde nicht gelesen. Die vorhandenen FlipperOne-OSINT-AppImages (aarch64,
+0.1.1 … 1.3.0) sind unverändert.
 
-1. Tests ergänzen: Audit-Manipulation (`audit.verify`/`rechain`), Storage (Migration, Verschlüsselung, `delete_case`, `encrypt_existing`), Credentials (Locked, Env-Override, 0600), Pipl/Spokeo (Fake-Server: Schlüssel ungültig → 403 → Status `ERROR`, Datenminimierung: keine Adressen/DOB/Verwandte), Vendor-Contract (ShadowDragon/Babel Street → `AuthorizationDenied`), Graph-Regeln, Exchange (Roundtrip, Versionssperre, ID-Neuvergabe), Report (HTML-Escaping), Plugin-Registry, CLI.
-2. UI mit PySide6 (`src/personintel/ui/`, Einstiegspunkt `ui/app.py: run(args) -> int`): Dashboard (Echtstatus der zehn Module), Fälle (Zweck, Kennungen), Recherche-Formulare mit Bestätigungsdialog für aktive Prüfungen, Ergebnisse (Quelle, Zeitstempel, Belegstufe, Prüfstatus), Graph (`graph.model.layout`), Zeitleiste (`Engine.timeline`), Bericht (MD/HTML/PDF), Einstellungen (pro Adapter aus `Adapter.config_fields`, Zugangsdaten entsperren, Pipl `test_connection()`), Fall-Import/-Export, Löschen. Job-Updates per `engine.jobs.add_listener` über Qt-Signal in den GUI-Thread bringen. Offscreen-Smoketest mit `QT_QPA_PLATFORM=offscreen` (`pip install PySide6 --break-system-packages`).
-3. Packaging: `packaging/build_appimage.sh` + `packaging/appimage/{entrypoint.sh,requirements.txt,personintel.desktop,icon}` (python-appimage; ARM64 nur auf nativer ARM64-Hardware oder per QEMU mit `--linux-tag manylinux2014_aarch64`). Ausgabe **nur** nach `DevBuilds/PersonIntel-<neue-Version>-<arch>.AppImage`, nie bestehende Dateien überschreiben; `DevBuilds/VERSIONS.md` nur durch Anfügen einer neuen Zeile ändern. Bisher **kein** Build.
-4. Dokumentation: `README.md`, `docs/INSTALL.md`, `docs/ARCHITECTURE.md` (inkl. "Neuen Anbieter anbinden"), `docs/FUSION.md` (Paket-API `personintel.api`, Austauschformat `personintel.case` 1.0, Plugin-Entry-Points `personintel.adapters`/`personintel.ui_pages`). `docs/` und `packaging/appimage/` sind leer.
-5. Echte Tools verifizieren, sobald installiert: `holehe`, `sherlock`, `mosint` (+ `~/.mosint.yaml`), `phoneinfoga`, `ignorant`; erst dann Annahmen zu Ausgabeformaten bestätigen (insbesondere Mosint-JSON-Schema und PhoneInfoga-CLI-Text, beides nicht formal dokumentiert).
-6. `pyproject.toml` verweist auf `personintel.__main__:main` und `personintel.cli:main` – beide vorhanden; `ui.app` fehlt noch.
-7. ShadowDragon/Babel Street: Recherche bleibt "nicht verfügbar", bis Anbieterdokumentation, Basis-URL, Authentifizierung und Antwortschema vorliegen (Voraussetzung steht im jeweiligen Adapter in `REQUIREMENT`).
+Vorschlag für die nächsten Testschritte – bewusst noch nicht durchgeführt:
 
-## Exakte nächste Schritte
-
-```bash
-git clone https://github.com/wasabicover258/FlipperOne-OSINT && cd FlipperOne-OSINT
-git checkout dev/personintel-wip
-cd PersonIntel
-pip install -e '.[dev]' --break-system-packages     # cryptography, phonenumbers, pytest
-python -m pytest -q                                  # erwartet: 26 passed
-```
-
-1. Fehlende Tests schreiben (Punkt 1) und grün bekommen.
-2. `pip install PySide6 --break-system-packages`, `src/personintel/ui/` bauen (Punkt 2), Offscreen-Smoketest.
-3. Docs schreiben (Punkt 4).
-4. AppImage-Skript schreiben (Punkt 3), auf Zielhardware bauen, Ergebnis unter neuem Versionsnamen in `DevBuilds/` ablegen.
-5. Flipper-One-Emulator-Abschnitt oben abarbeiten.
-6. Abschlussbericht mit klarer Trennung "verifiziert / unverifiziert".
+1. In `Flipper-Emulator` nachsehen, welche Tests und Ergebnisse es für FlipperOne-OSINT 1.3.0 gibt.
+2. Klären, ob PersonIntel überhaupt auf Flipper One laufen soll. PySide6/Qt ist für das kleine
+   Display und ein ARM64-AppImage schwergewichtig; die Flipper-App ist bewusst Go + SDL2. Für den
+   Flipper wäre eher die CLI (`personintel-cli`) oder eine eigene schlanke Oberfläche sinnvoll,
+   die über `personintel.api` arbeitet.
+3. Falls ja: ARM64-AppImage bauen (Schritt 2 oben), im Emulator starten, Startlog prüfen.
+4. Falls nein: PersonIntel nur auf dem Linux-Desktop testen (x86_64 und ARM64).
 
 ## Quellen der Schnittstellenrecherche
 
-docs.pipl.com (Search API), docs.spokeo.com (v5), GitHub-READMEs von megadose/holehe, alpkeskin/mosint, sherlock-project/sherlock, sundowndev/phoneinfoga, megadose/ignorant, Lucksi/Mr.Holmes.
+docs.pipl.com (Search API), docs.spokeo.com (v5), GitHub-READMEs von megadose/holehe,
+alpkeskin/mosint, sherlock-project/sherlock, sundowndev/phoneinfoga, megadose/ignorant,
+Lucksi/Mr.Holmes; python-appimage.readthedocs.io sowie der Quellcode von
+`python_appimage.commands.build.app` für die Rezeptkonventionen.

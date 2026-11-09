@@ -434,3 +434,56 @@ def test_context_runs_work_in_background(qapp, engine):
             break
     assert errors and "ZeroDivisionError" in errors[0]
     ctx.shutdown()
+
+
+# ------------------------------------------------------------- echter Startweg
+def test_run_starts_and_quits_cleanly(qapp, tmp_path, monkeypatch, bin_dir):
+    """Startet den echten Einstiegspunkt (ui.app.run) und beendet ihn ueber einen Timer."""
+    from PySide6.QtCore import QTimer
+    from personintel.ui.app import run
+    monkeypatch.delenv("PERSONINTEL_DB_PASSPHRASE", raising=False)
+    QTimer.singleShot(1200, qapp.quit)
+    code = run(["--data-dir", str(tmp_path / "home")])
+    assert code == 0
+    assert (tmp_path / "home" / "data" / "personintel.db").is_file()
+
+
+def test_run_reports_version(qapp, capsys):
+    from personintel.ui.app import run
+    with pytest.raises(SystemExit) as exc:
+        run(["--version"])
+    assert exc.value.code == 0
+    assert "personintel" in capsys.readouterr().out
+
+
+def test_module_entry_point_starts_the_ui(qapp, tmp_path, bin_dir):
+    """`python -m personintel` muss die Oberflaeche aufrufen (hier ohne echtes Fenster)."""
+    import personintel.__main__ as main_mod
+    from PySide6.QtCore import QTimer
+    QTimer.singleShot(1000, qapp.quit)
+    assert main_mod.main(["--data-dir", str(tmp_path / "h2")]) == 0
+
+
+def test_locked_database_asks_for_passphrase(qapp, tmp_path, monkeypatch, bin_dir):
+    """Bei verschluesselter Datenbank wird die Passphrase erfragt - und akzeptiert."""
+    from personintel.api import AppPaths, Engine
+    from personintel.ui import app as app_mod
+    base = tmp_path / "enc"
+    paths = AppPaths(data_dir=base / "data", config_dir=base / "config")
+    paths.ensure()
+    eng = Engine(paths, db_passphrase="geheim")
+    make_case(eng)
+    eng.close()
+    monkeypatch.delenv("PERSONINTEL_DB_PASSPHRASE", raising=False)
+    asked = []
+
+    def ask(info: str) -> str:
+        asked.append(info)
+        return "geheim"
+
+    engine = app_mod.open_engine(paths, ask_passphrase=ask)
+    try:
+        assert asked and "Passphrase" in asked[0]
+        assert engine.cases()[0].name == "Testfall"
+    finally:
+        engine.close()
