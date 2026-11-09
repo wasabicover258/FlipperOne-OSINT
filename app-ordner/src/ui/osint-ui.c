@@ -179,6 +179,8 @@ static const Mode modes[] = {
      "Checks public account pages", "across available platforms.", 0},
     {"Full name", "person-name", "Full name", "e.g. Donald Trump",
      "Search public Wikidata, Wikipedia", "and GitHub candidate records.", 0},
+    {"AI web & PDFs", "ai-web", "Name or research topic", "e.g. Donald Trump",
+     "Search documents, web and PDFs.", "Get 3-5 sourced key findings.", 0},
     {"IPv4 address", "ipv4", "IPv4 address", "e.g. 8.8.8.8",
      "Network operator, DNS, services", "and public technical records.", 0},
     {"IPv6 address", "ipv6", "IPv6 address", "e.g. 2606:4700:4700::1111",
@@ -204,6 +206,8 @@ static const Mode modes[] = {
     {"Network number", "asn", "Autonomous system number", "e.g. AS15169",
      "Public operator and network", "prefix information.", 0},
 
+    {"AI search setup", "ai-status", "AI configuration", "",
+     "Check web and model connection.", "Shows setup steps, never secrets.", MF_NOINPUT},
     {"Check tools", "pi-status", "Modules", "",
      "Which extra tools are available", "and which still need setup?", MF_NOINPUT},
     {"Research settings", "pi-case", "Optional case notes", "e.g. research purpose",
@@ -1276,7 +1280,7 @@ static void t_menu(void) {
     t_reset();
     T_CHECK(NMODES >= 14, "expected at least 14 modes, got %d", NMODES);
     /* First six are input identifiers; legacy workflows remain available below. */
-    const char *first6[] = {"combo-phone", "combo-email", "combo-username", "person-name", "ipv4", "ipv6"};
+    const char *first6[] = {"combo-phone", "combo-email", "combo-username", "person-name", "ai-web", "ipv4"};
     for (int i = 0; i < 6; i++)
         T_CHECK(strcmp(modes[i].cmd, first6[i]) == 0, "mode %d is %s, expected %s", i, modes[i].cmd, first6[i]);
     /* Original CLI paths are preserved in Go, but duplicates do not clutter the menu. */
@@ -1315,7 +1319,7 @@ static int t_mode_by_cmd(const char *cmd) {
 
 static void t_instant_search(void) {
     t_reset();
-    const char *public_queries[]={"combo-phone","combo-email","combo-username","person-name",
+    const char *public_queries[]={"combo-phone","combo-email","combo-username","person-name","ai-web",
         "company","website","address","gps"};
     for (size_t i=0;i<sizeof public_queries/sizeof public_queries[0];i++) {
         int idx=t_mode_by_cmd(public_queries[i]);
