@@ -1,0 +1,16 @@
+name: ChatGPT 2.0.3 Actions runner diagnostic
+on:
+  push:
+    branches:
+      - experiment/chatgpt-v2.0.3-list-buttons
+    paths:
+      - .github/workflows/experiment-chatgpt-v2.0.3-smoke.yml
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Verify GitHub Actions can start any job
+        run: |
+          echo "Runner online: $(uname -m)"
