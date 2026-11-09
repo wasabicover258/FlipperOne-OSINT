@@ -2,6 +2,18 @@
  * Usage: osint-ui <path-to-osint-cli>
  * Input: the Flipper One buttons below the screen (they arrive as the keys
  * Z X C V B), the Backspace key, arrow keys + Enter, touch/mouse.
+ *
+ * The menu carries the infrastructure modules (unchanged) and the person modules that run
+ * through PersonIntel. It scrolls, so more entries than fit on the panel are reachable with
+ * the d-pad alone.
+ *
+ * An "active check" contacts third parties on behalf of the research. Those modes never start
+ * from the input screen: they go through a confirmation screen first, where the identifier is
+ * shown again and two statements have to be ticked. Only then does the backend receive the
+ * word "confirm" as its third argument - without it PersonIntel refuses the query.
+ *
+ * Result markers from the backend: + found, - not found, ! warning, i info, # section,
+ * and for person findings the evidence level: = proven, ~ indication, ? unconfirmed.
  */
 #define _GNU_SOURCE
 #include <SDL.h>
@@ -24,7 +36,6 @@
 #define TABH 14       /* height of the button tab bar at the bottom */
 #define MAXLINES 4000
 #define MAXIN 120
-#define NMODES 5
 
 #ifndef APP_VERSION
 #define APP_VERSION "dev"
@@ -40,6 +51,10 @@ static const Color C_SOFT = {128, 62, 0};    /* secondary text */
 static const Color C_LIGHT = {255, 176, 80}; /* text on dark */
 static const Color C_GREEN = {10, 110, 30};
 static const Color C_RED = {160, 20, 0};
+/* evidence levels: proven / indication / unconfirmed */
+static const Color C_PROVEN = {8, 92, 26};
+static const Color C_INDIC = {120, 58, 0};
+static const Color C_UNCONF = {128, 62, 0};
 
 /* ---------- 5x8 font (upper and lower case) ---------- */
 typedef struct { char c; const char *r[8]; } Glyph;
@@ -143,29 +158,60 @@ static const Glyph glyphs[] = {
 };
 
 /* ---------- state ---------- */
+/* MF_NOINPUT: no text field, runs straight away.
+ * MF_ACTIVE:  contacts third parties -> confirmation screen before the run. */
+#define MF_NOINPUT 1u
+#define MF_ACTIVE 2u
+
 typedef struct {
     const char *label, *cmd, *prompt, *example, *d1, *d2;
+    unsigned flags;
 } Mode;
 
-static const Mode modes[NMODES] = {
+static const Mode modes[] = {
     {"Username", "username", "Username", "e.g. maxmuster",
-     "Checks the handle on 70+ public", "platforms, grouped by category."},
+     "Checks the handle on 70+ public", "platforms, grouped by category.", 0},
     {"Email address", "email", "Email address", "e.g. name@example.com",
-     "Provider, mail server and full", "SPF/DMARC/DKIM security grade."},
+     "Provider, mail server and full", "SPF/DMARC/DKIM security grade.", 0},
     {"Phone number", "phone", "Phone number", "e.g. +49 171 1234567",
-     "Country, format and line type", "(offline). No owner lookup."},
+     "Country, format and line type", "(offline). No owner lookup.", 0},
     {"Domain / recon", "domain", "Domain", "e.g. example.com",
-     "Full recon, live port/CVE tree,", "entity graph + correlations."},
+     "Full recon, live port/CVE tree,", "entity graph + correlations.", 0},
     {"IP address", "ip", "IP address", "e.g. 8.8.8.8",
-     "rDNS, ASN, RDAP, live port scan +", "banners, software and known CVEs."},
-};
+     "rDNS, ASN, RDAP, live port scan +", "banners, software and known CVEs.", 0},
 
-enum { S_MENU, S_INPUT, S_RUN };
+    {"Person modules", "pi-status", "Modules", "",
+     "Real status of all ten person", "modules and what each one needs.", MF_NOINPUT},
+    {"Case & purpose", "pi-case", "Research purpose", "why are you researching?",
+     "Person queries stay blocked until", "a purpose is documented here.", 0},
+
+    {"Person: username", "combo-username", "Username", "e.g. maxmuster",
+     "70 platforms + Sherlock and more,", "merged, with evidence levels.", MF_ACTIVE},
+    {"Person: email", "combo-email", "Email address", "e.g. name@example.com",
+     "Mail check + Holehe/Mosint/Pipl,", "merged. No leaked passwords.", MF_ACTIVE},
+    {"Person: phone", "combo-phone", "Phone number", "e.g. +49 171 1234567",
+     "Offline check + PhoneInfoga and", "Ignorant. No owner lookup.", MF_ACTIVE},
+    {"Person: name", "person-name", "Full name", "e.g. Erika Beispiel",
+     "Vendor search (Pipl) - needs a", "contract. Never an identity proof.", MF_ACTIVE},
+    {"Import report", "person-report", "Report file", "/home/user/Files/report.txt",
+     "Reads an existing Mr.Holmes report", "from the device. Passive.", 0},
+
+    {"Links & hints", "pi-graph", "Links", "",
+     "Links taken over by hand, with", "their basis. Hints are not links.", MF_NOINPUT},
+    {"Report", "pi-report", "Report", "",
+     "Purpose, method, findings by", "evidence level, limitations.", MF_NOINPUT},
+};
+#define NMODES ((int)(sizeof modes / sizeof modes[0]))
+
+enum { S_MENU, S_INPUT, S_CONFIRM, S_RUN };
 static int screen = S_MENU;
 static int sel = 0;
+static int menu_view = 0; /* first visible menu row */
 static int mode_idx = 0;
 static char inputs[NMODES][MAXIN + 1];
 static int cur[NMODES];   /* text cursor position per mode */
+static int cf_third = 0, cf_tos = 0; /* the two statements on the confirmation screen */
+static int run_confirmed = 0;        /* hand "confirm" to the backend for this run */
 static int view_off = 0;  /* first visible character of the input field */
 static int quit = 0;
 static int text_seen = 0;
@@ -354,6 +400,9 @@ static void push_result(const char *raw) {
     case '+': wrap_add('+', rest, 1); break;
     case '-': wrap_add('-', rest, 2); break;
     case '!': wrap_add('!', rest, 3); break;
+    case '=': wrap_add('=', rest, 5); break; /* proven: only after a human review */
+    case '~': wrap_add('~', rest, 6); break; /* indication */
+    case '?': wrap_add('?', rest, 7); break; /* unconfirmed */
     case 'i': wrap_add(' ', rest, 0); break;
     default: wrap_add(' ', raw, 0); break;
     }
@@ -373,7 +422,7 @@ static void stop_child(void) {
     running = 0;
 }
 
-static int spawn_cli(const char *type, const char *value) {
+static int spawn_cli(const char *type, const char *value, const char *extra) {
     int p[2];
     if (pipe(p) != 0) return -1;
     pid_t pid = fork();
@@ -388,7 +437,10 @@ static int spawn_cli(const char *type, const char *value) {
         dup2(p[1], 2);
         close(p[0]);
         close(p[1]);
-        execl(cli_path, cli_path, type, value, (char *)NULL);
+        if (extra && *extra)
+            execl(cli_path, cli_path, type, value, extra, (char *)NULL);
+        else
+            execl(cli_path, cli_path, type, value, (char *)NULL);
         _exit(127);
     }
     close(p[1]);
@@ -458,7 +510,12 @@ static void start_run(void) {
     size_t l = strlen(in);
     while (l > 0 && in[l - 1] == ' ') in[--l] = 0;
     if (cur[mode_idx] > (int)l) cur[mode_idx] = (int)l;
-    if (l == 0) return;
+    /* Modes without a text field pass a placeholder: the backend expects two arguments. */
+    if (l == 0) {
+        if (!(modes[mode_idx].flags & MF_NOINPUT)) return;
+        strcpy(in, "show");
+        l = 4;
+    }
     stop_child();
     nlines = 0;
     scroll_pos = 0;
@@ -472,7 +529,7 @@ static void start_run(void) {
     sec_view = 0;
     nsec = 0;
     screen = S_RUN;
-    if (spawn_cli(modes[mode_idx].cmd, in) != 0) {
+    if (spawn_cli(modes[mode_idx].cmd, in, run_confirmed ? "confirm" : NULL) != 0) {
         push_result("! Could not start backend");
         finished = 1;
     } else {
@@ -555,10 +612,32 @@ static void go_back_from_run(void) {
     screen = S_INPUT;
 }
 
+static void menu_sync_view(void);
+
 static void activate(int idx) {
     mode_idx = idx;
+    run_confirmed = 0;
+    if (modes[idx].flags & MF_NOINPUT) {
+        inputs[idx][0] = 0;
+        cur[idx] = 0;
+        start_run();
+        return;
+    }
     screen = S_INPUT;
     SDL_StartTextInput();
+}
+
+/* An active check never starts straight from the input screen. */
+static void request_start(void) {
+    if (modes[mode_idx].flags & MF_ACTIVE) {
+        const char *in = inputs[mode_idx];
+        if (!in[0]) return;
+        cf_third = cf_tos = 0;
+        screen = S_CONFIRM;
+        return;
+    }
+    run_confirmed = 0;
+    start_run();
 }
 
 /* ---------- on-screen keyboard ---------- */
@@ -659,6 +738,7 @@ static void act_back(void) {
         if (inputs[mode_idx][0] == 0) screen = S_MENU;
         else in_delete();
         break;
+    case S_CONFIRM: screen = S_INPUT; break;
     case S_RUN: go_back_from_run(); break;
     default: break;
     }
@@ -666,6 +746,7 @@ static void act_back(void) {
 
 static void act_z(void) {
     if (screen == S_INPUT) in_move(-1);
+    else if (screen == S_CONFIRM) cf_third = !cf_third; /* tick the first statement */
     else quit = 1;
 }
 
@@ -678,6 +759,10 @@ static void act_z(void) {
 static void act_x(void) {
     if (screen == S_INPUT) {
         in_move(1);
+        return;
+    }
+    if (screen == S_CONFIRM) {
+        cf_tos = !cf_tos; /* tick the second statement */
         return;
     }
     if (screen != S_RUN) return;
@@ -703,6 +788,8 @@ static void act_v(void) {
         /* The system swallows the physical Bksp key (it closes the app), so
          * the step back lives on a button the app actually receives. */
         screen = S_MENU;
+    } else if (screen == S_CONFIRM) {
+        screen = S_INPUT; /* cancel: nothing was sent */
     } else if (screen == S_RUN) {
         if (running) {
             stop_child();
@@ -717,7 +804,13 @@ static void act_v(void) {
 static void act_ok(void) {
     switch (screen) {
     case S_MENU: activate(sel); break;
-    case S_INPUT: start_run(); break;
+    case S_INPUT: request_start(); break;
+    case S_CONFIRM:
+        if (cf_third && cf_tos) {
+            run_confirmed = 1;
+            start_run();
+        }
+        break;
     case S_RUN: go_back_from_run(); break;
     default: break;
     }
@@ -759,10 +852,20 @@ static void on_key(const SDL_KeyboardEvent *k, char *kbuf) {
     if (s == SDLK_F4) { softkey(3); return; }
     switch (screen) {
     case S_MENU:
-        if (s == SDLK_UP) sel = (sel + NMODES - 1) % NMODES;
-        else if (s == SDLK_DOWN) sel = (sel + 1) % NMODES;
+        if (s == SDLK_UP) { sel = (sel + NMODES - 1) % NMODES; menu_sync_view(); }
+        else if (s == SDLK_DOWN) { sel = (sel + 1) % NMODES; menu_sync_view(); }
+        else if (s == SDLK_PAGEUP) { sel = sel > 5 ? sel - 6 : 0; menu_sync_view(); }
+        else if (s == SDLK_PAGEDOWN) { sel = sel + 6 < NMODES ? sel + 6 : NMODES - 1; menu_sync_view(); }
+        else if (s == SDLK_HOME) { sel = 0; menu_sync_view(); }
+        else if (s == SDLK_END) { sel = NMODES - 1; menu_sync_view(); }
         else if (enter) activate(sel);
-        else if (s >= SDLK_1 && s <= SDLK_5) { sel = (int)(s - SDLK_1); activate(sel); }
+        else if (s >= SDLK_1 && s <= SDLK_5) { sel = (int)(s - SDLK_1); menu_sync_view(); activate(sel); }
+        break;
+    case S_CONFIRM:
+        if (s == SDLK_ESCAPE) screen = S_INPUT;
+        else if (s == SDLK_UP || s == SDLK_LEFT) cf_third = !cf_third;
+        else if (s == SDLK_DOWN || s == SDLK_RIGHT) cf_tos = !cf_tos;
+        else if (enter && cf_third && cf_tos) { run_confirmed = 1; start_run(); }
         break;
     case S_INPUT:
         if (s == SDLK_ESCAPE) screen = S_MENU;
@@ -810,8 +913,19 @@ static void on_key(const SDL_KeyboardEvent *k, char *kbuf) {
 }
 
 #define MENU_Y0 17
-#define MENU_P 18
-#define MENU_H 15
+#define MENU_P 15
+#define MENU_H 13
+#define MENU_VIS 6 /* visible menu rows; the list scrolls */
+#define CF_Y0 54   /* first statement on the confirmation screen */
+#define CF_GAP 27  /* distance to the second statement */
+
+/* Keep the selected entry inside the visible window. */
+static void menu_sync_view(void) {
+    if (sel < menu_view) menu_view = sel;
+    if (sel >= menu_view + MENU_VIS) menu_view = sel - MENU_VIS + 1;
+    if (menu_view > NMODES - MENU_VIS) menu_view = NMODES - MENU_VIS;
+    if (menu_view < 0) menu_view = 0;
+}
 
 static void on_click(int px, int py) {
     int ww = W, wh = H;
@@ -828,8 +942,16 @@ static void on_click(int px, int py) {
         return;
     }
     if (screen == S_MENU) {
-        int i = (y - MENU_Y0 + 2) / MENU_P;
-        if (y >= MENU_Y0 - 2 && i >= 0 && i < NMODES) { sel = i; activate(sel); }
+        int row = (y - MENU_Y0 + 2) / MENU_P;
+        int i = menu_view + row;
+        if (y >= MENU_Y0 - 2 && row >= 0 && row < MENU_VIS && i < NMODES) {
+            sel = i;
+            menu_sync_view();
+            activate(sel);
+        }
+    } else if (screen == S_CONFIRM) {
+        if (y >= CF_Y0 && y < CF_Y0 + CH + 4) cf_third = !cf_third;
+        else if (y >= CF_Y0 + CF_GAP && y < CF_Y0 + CF_GAP + CH + 4) cf_tos = !cf_tos;
     } else if (screen == S_RUN && run_view == RV_OVERVIEW && y >= HDR) {
         int r = (y - HDR) / CH;
         int i = sec_view + r;
@@ -864,22 +986,79 @@ static void on_wheel(int dy) {
         if (sec_sel < 0) sec_sel = 0;
         if (sec_sel > nsec - 1) sec_sel = nsec - 1;
     } else if (screen == S_RUN) scroll_by(-dy * 3);
-    else if (screen == S_MENU) sel = (sel - dy + NMODES * 8) % NMODES;
+    else if (screen == S_MENU) {
+        sel = (sel - dy + NMODES * 8) % NMODES;
+        menu_sync_view();
+    }
 }
 
 /* ---------- screens ---------- */
 static void draw_menu(void) {
-    title("v" APP_VERSION);
-    for (int i = 0; i < NMODES; i++) {
-        int y = MENU_Y0 + i * MENU_P;
+    char right[24];
+    snprintf(right, sizeof right, "%d/%d", sel + 1, NMODES);
+    title(right);
+    for (int r = 0; r < MENU_VIS; r++) {
+        int i = menu_view + r;
+        if (i >= NMODES) break;
+        int y = MENU_Y0 + r * MENU_P;
         int on = (i == sel);
-        pill(6, y, W - 12, MENU_H, on ? C_INK : C_PILL);
-        text_px(14, y + 4, modes[i].label, on ? C_LIGHT : C_INK);
-        if (on) text_px(W - 20, y + 4, ">", C_LIGHT);
+        pill(6, y, W - 14, MENU_H, on ? C_INK : C_PILL);
+        text_px(13, y + 3, modes[i].label, on ? C_LIGHT : C_INK);
+        /* mark what contacts third parties, so it is visible before opening */
+        if (modes[i].flags & MF_ACTIVE)
+            text_px(W - 30, y + 3, "!", on ? C_LIGHT : C_RED);
+        if (on) text_px(W - 21, y + 3, ">", C_LIGHT);
+    }
+    if (NMODES > MENU_VIS) {
+        int track = MENU_VIS * MENU_P;
+        int th = track * MENU_VIS / NMODES;
+        if (th < 6) th = 6;
+        int mx = NMODES - MENU_VIS;
+        int ty = MENU_Y0 + (track - th) * menu_view / (mx > 0 ? mx : 1);
+        rect(W - 4, MENU_Y0, 1, track, C_FIELD);
+        rect(W - 5, ty, 3, th, C_INK);
     }
     text_px(8, 111, modes[sel].d1, C_SOFT);
     text_px(8, 120, modes[sel].d2, C_SOFT);
     softkeys("Exit", NULL, NULL, "Open");
+}
+
+/* Confirmation of an active check: the identifier is shown again and both statements
+ * have to be ticked. Z toggles the first, X the second, B starts, V cancels. */
+static void draw_confirm(void) {
+    title("Active check");
+    const Mode *m = &modes[mode_idx];
+    pill(4, 16, W - 8, 11, C_FIELD);
+    text_bold(8, 17, "Contacts third parties", C_INK);
+    text_px(8, 29, "Modules:", C_SOFT);
+    text_px(8 + 9 * CW, 29, m->label, C_INK);
+    text_px(8, 40, m->prompt, C_SOFT);
+    char v[COLS + 1];
+    snprintf(v, sizeof v, "%s", inputs[mode_idx]);
+    text_bold(8 + (int)(strlen(m->prompt) + 1) * CW, 40, v, C_INK);
+
+    const char *l1a = "The query can be visible to";
+    const char *l1b = "the person (e.g. notices).";
+    const char *l2a = "Terms of service are kept;";
+    const char *l2b = "it is within the purpose.";
+    for (int i = 0; i < 2; i++) {
+        int y = CF_Y0 + i * CF_GAP;
+        int on = i == 0 ? cf_third : cf_tos;
+        pill(4, y, 11, 11, on ? C_INK : C_PILL);
+        if (on) {
+            rect(7, y + 6, 2, 2, C_LIGHT);
+            rect(9, y + 4, 2, 2, C_LIGHT);
+            rect(11, y + 2, 2, 2, C_LIGHT);
+        }
+        text_px(19, y + 1, i == 0 ? l1a : l2a, C_INK);
+        text_px(19, y + 11, i == 0 ? l1b : l2b, C_INK);
+        text_px(W - 7 * CW, y + 1, i == 0 ? "[Z]" : "[X]", C_SOFT);
+    }
+    int ready = cf_third && cf_tos;
+    text_px(8, 111, ready ? "Both confirmed - B starts the query." : "Tick both with Z and X.",
+            ready ? C_INK : C_SOFT);
+    text_px(8, 120, "Nothing has been sent yet.", C_SOFT);
+    softkeys("Tick 1", "Tick 2", "Cancel", ready ? "Start" : "...");
 }
 
 static void draw_osk(void) {
@@ -940,11 +1119,24 @@ static void draw_lines(int from, int to) {
             text_bold(10, y, ln->t + 2, C_INK);
             continue;
         }
-        Color tc = ln->kind == 2 ? C_SOFT : (ln->kind == 3 ? C_RED : C_INK);
+        Color tc = C_INK;
+        switch (ln->kind) {
+        case 2: tc = C_SOFT; break;
+        case 3: tc = C_RED; break;
+        case 5: tc = C_PROVEN; break;
+        case 6: tc = C_INDIC; break;
+        case 7: tc = C_UNCONF; break;
+        default: break;
+        }
         if (mk == '+') rect(5, y + 2, 3, 3, C_GREEN);
         else if (mk == '-') rect(5, y + 2, 3, 3, C_SOFT);
         else if (mk == '!') rect(5, y + 2, 3, 3, C_RED);
-        text_px(12, y, ln->t + 2, tc);
+        else if (mk == '=') { rect(4, y + 1, 5, 5, C_PROVEN); rect(5, y + 2, 3, 3, C_LIGHT); }
+        else if (mk == '~') rect(4, y + 2, 5, 3, C_INDIC);
+        else if (mk == '?') rect(6, y + 3, 2, 2, C_UNCONF); /* faint dot: weakest level */
+        /* proven findings are the only ones drawn bold */
+        if (ln->kind == 5) text_bold(12, y, ln->t + 2, tc);
+        else text_px(12, y, ln->t + 2, tc);
     }
     int total = to - from;
     if (total > VH) {
@@ -960,11 +1152,17 @@ static void draw_lines(int from, int to) {
 
 /* Worst-severity dot for a section's lines: red warning, else green finding. */
 static void sev_dot(int x, int y, int st, int en) {
-    int bang = 0, ok = 0;
+    int bang = 0, ok = 0, proven = 0;
     for (int i = st; i < en; i++) {
         char m = lines[i].t[0];
         if (m == '!') bang = 1;
-        else if (m == '+') ok = 1;
+        else if (m == '=') proven = 1;
+        else if (m == '+' || m == '~') ok = 1;
+    }
+    if (proven) {
+        rect(x - 1, y - 1, 5, 5, C_PROVEN);
+        rect(x, y, 3, 3, C_LIGHT);
+        return;
     }
     rect(x, y, 3, 3, bang ? C_RED : (ok ? C_GREEN : C_SOFT));
 }
@@ -1011,7 +1209,7 @@ static void draw_overview(void) {
         int plus = 0, bang = 0;
         for (int k = st + 1; k < en; k++) {
             char m = lines[k].t[0];
-            if (m == '+') plus++;
+            if (m == '+' || m == '=' || m == '~' || m == '?') plus++;
             else if (m == '!') bang++;
         }
         char cnt[16];
@@ -1054,12 +1252,314 @@ static void render(void) {
     switch (screen) {
     case S_MENU: draw_menu(); break;
     case S_INPUT: draw_input(); break;
+    case S_CONFIRM: draw_confirm(); break;
     case S_RUN: draw_run(); break;
     }
     SDL_RenderPresent(ren);
 }
 
+/* ---------- self test ----------
+ * Checks the state machine without a display: menu scrolling, the confirmation step for
+ * active checks, and the marker-to-row mapping. Run with "osint-ui --selftest"; it is also
+ * run by the build workflow, so a regression in the key handling fails the build.
+ */
+#define T_CHECK(cond, ...)                                                                        \
+    do {                                                                                          \
+        if (!(cond)) {                                                                            \
+            fprintf(stderr, "FAIL %s:%d: ", __func__, __LINE__);                                  \
+            fprintf(stderr, __VA_ARGS__);                                                         \
+            fprintf(stderr, "\n");                                                                \
+            t_fail++;                                                                             \
+        } else                                                                                    \
+            t_ok++;                                                                               \
+    } while (0)
+
+static int t_ok = 0, t_fail = 0;
+
+static void t_reset(void) {
+    screen = S_MENU;
+    sel = 0;
+    menu_view = 0;
+    mode_idx = 0;
+    run_confirmed = 0;
+    cf_third = cf_tos = 0;
+    nlines = 0;
+    nsec = 0;
+    running = 0;
+    finished = 0;
+    for (int i = 0; i < NMODES; i++) {
+        inputs[i][0] = 0;
+        cur[i] = 0;
+    }
+}
+
+static void t_menu(void) {
+    t_reset();
+    T_CHECK(NMODES >= 14, "expected at least 14 modes, got %d", NMODES);
+    /* the five original modules must still be first, in the original order */
+    const char *first5[] = {"username", "email", "phone", "domain", "ip"};
+    for (int i = 0; i < 5; i++)
+        T_CHECK(strcmp(modes[i].cmd, first5[i]) == 0, "mode %d is %s, expected %s", i, modes[i].cmd, first5[i]);
+    /* every mode reachable with the d-pad, and the selection stays visible */
+    for (int i = 0; i < NMODES; i++) {
+        T_CHECK(sel == i, "selection %d, expected %d", sel, i);
+        T_CHECK(sel >= menu_view && sel < menu_view + MENU_VIS, "entry %d outside the window (view %d)", sel, menu_view);
+        T_CHECK(menu_view >= 0 && menu_view <= NMODES - MENU_VIS, "view %d out of range", menu_view);
+        if (i < NMODES - 1) {
+            sel = (sel + 1) % NMODES;
+            menu_sync_view();
+        }
+    }
+    /* wrap around to the top */
+    sel = (sel + 1) % NMODES;
+    menu_sync_view();
+    T_CHECK(sel == 0 && menu_view == 0, "wrap around failed (sel %d, view %d)", sel, menu_view);
+    /* every mode has a label and a description */
+    for (int i = 0; i < NMODES; i++) {
+        T_CHECK(modes[i].label && modes[i].label[0], "mode %d without label", i);
+        T_CHECK(modes[i].d1 && modes[i].d1[0], "mode %d without description", i);
+        T_CHECK(strlen(modes[i].label) <= 34, "label of mode %d too long for the panel", i);
+        T_CHECK(strlen(modes[i].d1) <= 40 && strlen(modes[i].d2) <= 40, "description of mode %d too long", i);
+    }
+}
+
+static int t_mode_by_cmd(const char *cmd) {
+    for (int i = 0; i < NMODES; i++)
+        if (strcmp(modes[i].cmd, cmd) == 0) return i;
+    return -1;
+}
+
+static void t_confirm(void) {
+    /* an active check must not start from the input screen */
+    t_reset();
+    int idx = t_mode_by_cmd("combo-username");
+    T_CHECK(idx >= 0, "combo-username missing");
+    T_CHECK((modes[idx].flags & MF_ACTIVE) != 0, "combo-username is not marked as active");
+    mode_idx = idx;
+    screen = S_INPUT;
+    strcpy(inputs[idx], "jdoe");
+    request_start();
+    T_CHECK(screen == S_CONFIRM, "expected the confirmation screen, got %d", screen);
+    T_CHECK(run_confirmed == 0, "confirmation must not be pre-set");
+
+    /* OK without ticks does nothing */
+    act_ok();
+    T_CHECK(screen == S_CONFIRM, "started without ticks");
+    act_z();
+    act_ok();
+    T_CHECK(screen == S_CONFIRM, "started with only one tick");
+    T_CHECK(cf_third == 1 && cf_tos == 0, "Z must tick the first statement only");
+    act_x();
+    T_CHECK(cf_tos == 1, "X must tick the second statement");
+
+    /* cancel sends nothing */
+    act_v();
+    T_CHECK(screen == S_INPUT, "cancel must go back to the input screen");
+    T_CHECK(run_confirmed == 0, "cancel must not confirm");
+
+    /* a passive mode starts directly */
+    t_reset();
+    int rep = t_mode_by_cmd("person-report");
+    T_CHECK(rep >= 0 && !(modes[rep].flags & MF_ACTIVE), "person-report must not be an active check");
+    mode_idx = rep;
+    screen = S_INPUT;
+    strcpy(inputs[rep], "/tmp/report.txt");
+    cli_path = "/bin/true";
+    request_start();
+    T_CHECK(screen == S_RUN, "a passive mode must start directly, got %d", screen);
+    T_CHECK(run_confirmed == 0, "a passive mode must not be marked as confirmed");
+    stop_child();
+
+    /* empty input starts nothing */
+    t_reset();
+    mode_idx = idx;
+    screen = S_INPUT;
+    request_start();
+    T_CHECK(screen == S_INPUT, "empty input must not start anything");
+}
+
+static void t_noinput(void) {
+    t_reset();
+    int idx = t_mode_by_cmd("pi-status");
+    T_CHECK(idx >= 0 && (modes[idx].flags & MF_NOINPUT), "pi-status must need no input");
+    cli_path = "/bin/true";
+    sel = idx;
+    activate(idx);
+    T_CHECK(screen == S_RUN, "a mode without input must run straight away, got %d", screen);
+    T_CHECK(strcmp(inputs[idx], "show") == 0, "placeholder value missing: '%s'", inputs[idx]);
+    stop_child();
+}
+
+static void t_markers(void) {
+    t_reset();
+    struct { const char *line; int kind; char marker; } cases[] = {
+        {"+ found something", 1, '+'},
+        {"- nothing there", 2, '-'},
+        {"! careful", 3, '!'},
+        {"= proven by the source", 5, '='},
+        {"~ an indication only", 6, '~'},
+        {"? unconfirmed hint", 7, '?'},
+        {"i plain info", 0, ' '},
+    };
+    for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        nlines = 0;
+        push_result(cases[i].line);
+        T_CHECK(nlines == 1, "line %zu produced %d rows", i, nlines);
+        T_CHECK(lines[0].kind == cases[i].kind, "line %zu: kind %d, expected %d", i, lines[0].kind, cases[i].kind);
+        T_CHECK(lines[0].t[0] == cases[i].marker, "line %zu: marker '%c', expected '%c'", i, lines[0].t[0],
+                cases[i].marker);
+    }
+    /* section headings build the index, evidence rows are counted as hits */
+    nlines = 0;
+    push_result("# Person modules");
+    push_result("~ an indication");
+    push_result("= proven");
+    push_result("# Summary");
+    push_result("+ ok");
+    rebuild_sections();
+    T_CHECK(nsec == 2, "expected 2 sections, got %d", nsec);
+    int st, en;
+    secRange(0, &st, &en);
+    T_CHECK(lines[st].kind == 4, "a section must start with a heading");
+    /* long lines wrap instead of being cut off */
+    nlines = 0;
+    char longline[400];
+    memset(longline, 'a', sizeof longline - 1);
+    longline[sizeof longline - 1] = 0;
+    longline[0] = '~';
+    longline[1] = ' ';
+    push_result(longline);
+    T_CHECK(nlines > 1, "a long line must wrap, got %d rows", nlines);
+    for (int i = 0; i < nlines; i++)
+        T_CHECK(strlen(lines[i].t) <= COLS, "row %d longer than the panel", i);
+}
+
+static void t_input_editing(void) {
+    t_reset();
+    mode_idx = 1; /* email */
+    screen = S_INPUT;
+    append_input("name@example.com");
+    T_CHECK(strcmp(inputs[1], "name@example.com") == 0, "input is '%s'", inputs[1]);
+    in_move(-4);
+    in_insert('X');
+    T_CHECK(strcmp(inputs[1], "name@exampleX.com") == 0, "cursor insert failed: '%s'", inputs[1]);
+    in_delete();
+    T_CHECK(strcmp(inputs[1], "name@example.com") == 0, "delete failed: '%s'", inputs[1]);
+    in_clear();
+    T_CHECK(inputs[1][0] == 0, "clear failed");
+    /* the field must not overflow */
+    for (int i = 0; i < MAXIN + 50; i++) in_insert('a');
+    T_CHECK((int)strlen(inputs[1]) == MAXIN, "field length %zu, expected %d", strlen(inputs[1]), MAXIN);
+    /* backspace in an empty field steps back to the menu, it never closes the app */
+    in_clear();
+    act_back();
+    T_CHECK(screen == S_MENU, "step back failed");
+    T_CHECK(quit == 0, "the app must not close here");
+}
+
+static int selftest(void) {
+    t_menu();
+    t_confirm();
+    t_noinput();
+    t_markers();
+    t_input_editing();
+    printf("osint-ui selftest: %d checks ok, %d failed\n", t_ok, t_fail);
+    return t_fail == 0 ? 0 : 1;
+}
+
+/* ---------- screenshot ----------
+ * "osint-ui --screenshot <dir>" renders every screen once into <dir> as BMP files, using the offscreen
+ * driver. Used to review the panel layout without a device.
+ */
+static int screenshot(const char *dir) {
+    SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+        fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
+        return 1;
+    }
+    win = SDL_CreateWindow("OSINT", 0, 0, W, H, SDL_WINDOW_HIDDEN);
+    ren = win ? SDL_CreateRenderer(win, -1, SDL_RENDERER_SOFTWARE) : NULL;
+    if (!ren) {
+        fprintf(stderr, "no renderer: %s\n", SDL_GetError());
+        return 1;
+    }
+    SDL_RenderSetLogicalSize(ren, W, H);
+    build_atlas();
+    if (!atlas) return 1;
+
+    struct { const char *name; int scr; } shots[] = {
+        {"1-menu-top", S_MENU}, {"2-menu-person", S_MENU}, {"3-input", S_INPUT},
+        {"4-confirm", S_CONFIRM}, {"5-confirm-ready", S_CONFIRM}, {"6-results", S_RUN},
+        {"7-overview", S_RUN},
+    };
+    for (size_t i = 0; i < sizeof shots / sizeof shots[0]; i++) {
+        t_reset();
+        screen = shots[i].scr;
+        if (strcmp(shots[i].name, "2-menu-person") == 0) {
+            sel = 7; /* Person: username */
+            menu_sync_view();
+        } else if (shots[i].scr == S_INPUT) {
+            mode_idx = 8; /* Person: email */
+            strcpy(inputs[mode_idx], "erika@example.org");
+            cur[mode_idx] = (int)strlen(inputs[mode_idx]);
+        } else if (shots[i].scr == S_CONFIRM) {
+            mode_idx = 7;
+            strcpy(inputs[mode_idx], "jdoe");
+            if (strcmp(shots[i].name, "5-confirm-ready") == 0) cf_third = cf_tos = 1;
+        } else if (shots[i].scr == S_RUN) {
+            push_result("# Person research: username");
+            push_result("i Case: Device research (purpose valid until 2026-11-10)");
+            push_result("i Sherlock: active check started (contacts third parties)");
+            push_result("~ Profile \"jdoe\" on GitHub (per Sherlock)");
+            push_result("i     https://github.com/jdoe");
+            push_result("i     same handle only - no proof of the same person");
+            push_result("= Confirmed: profile named by the source itself");
+            push_result("? Hint: same handle on 2 platforms");
+            push_result("- Pipl: needs an API key");
+            push_result("! Spokeo: rate limit reached (HTTP 429)");
+            push_result("# Combined results (3 items)");
+            push_result("i Proven 1 | indication 1 | unconfirmed 1");
+            finished = 1;
+            rebuild_sections();
+            if (strcmp(shots[i].name, "7-overview") == 0) {
+                run_view = RV_OVERVIEW;
+                sec_sel = 0;
+            } else {
+                run_view = RV_FULL;
+                finished_seen = 1; /* otherwise draw_run switches to the overview */
+                scroll_pos = 0;
+                follow = 0;
+            }
+        }
+        render();
+        SDL_Surface *sf = SDL_CreateRGBSurfaceWithFormat(0, W, H, 32, SDL_PIXELFORMAT_ARGB8888);
+        if (!sf) continue;
+        if (SDL_RenderReadPixels(ren, NULL, SDL_PIXELFORMAT_ARGB8888, sf->pixels, sf->pitch) == 0) {
+            char path[512];
+            snprintf(path, sizeof path, "%s/%s.bmp", dir, shots[i].name);
+            if (SDL_SaveBMP(sf, path) == 0) printf("wrote %s\n", path);
+            else fprintf(stderr, "SDL_SaveBMP: %s\n", SDL_GetError());
+        } else {
+            fprintf(stderr, "SDL_RenderReadPixels: %s\n", SDL_GetError());
+        }
+        SDL_FreeSurface(sf);
+    }
+    SDL_DestroyTexture(atlas);
+    SDL_DestroyRenderer(ren);
+    SDL_DestroyWindow(win);
+    SDL_Quit();
+    return 0;
+}
+
 int main(int argc, char **argv) {
+    if (argc > 2 && strcmp(argv[1], "--screenshot") == 0) {
+        osk_init();
+        return screenshot(argv[2]);
+    }
+    if (argc > 1 && strcmp(argv[1], "--selftest") == 0) {
+        osk_init();
+        return selftest();
+    }
     if (argc > 1) cli_path = argv[1];
     signal(SIGPIPE, SIG_IGN);
     osk_init();
