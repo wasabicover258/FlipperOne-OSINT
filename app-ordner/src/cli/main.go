@@ -64,6 +64,7 @@ func ascii(s string) string {
 }
 
 func emit(marker, s string) {
+    aiCapture(marker,s)
 	outMu.Lock()
 	defer outMu.Unlock()
 	fmt.Fprintf(os.Stdout, "%s %s\n", marker, ascii(s))
@@ -143,6 +144,10 @@ func main() {
 	}()
 
 	switch typ {
+    case "ai-web":
+        runAIWebResearch(val)
+    case "ai-status":
+        runAIStatus()
 	// --- infrastructure (unchanged behaviour) ---
 	case "username":
 		runUsername(val)
@@ -225,6 +230,10 @@ func main() {
 	default:
 		warn("Unknown type: %s", typ)
 	}
+
+	// A source-aware 3-5 point brief is computed from every scanner's actual
+    // emitted observations, before the legacy graph/record rendering.
+    aiBrief(val)
 
 	// The shared model only prints when something was collected, so the output of the
 	// infrastructure modules stays exactly as it was when nothing feeds it.
