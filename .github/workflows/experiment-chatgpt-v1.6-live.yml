@@ -1,0 +1,27 @@
+name: ChatGPT 1.6 Public Provider Live Check
+on:
+  push:
+    branches:
+      - experiment/chatgpt-v1.6-enrichment
+    paths:
+      - .github/workflows/experiment-chatgpt-v1.6-live.yml
+
+permissions:
+  contents: read
+
+jobs:
+  online-smoke:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Run read-only public API smoke checks on ARM64
+        working-directory: app-ordner/src/cli
+        env:
+          OSINT_V16_LIVE: '1'
+        run: |
+          set -euo pipefail
+          go test -v -count=1 -run '^TestLiveV16Sources$' ./...
