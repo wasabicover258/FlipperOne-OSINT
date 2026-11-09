@@ -2,6 +2,9 @@ package main
 
 import (
  "net"
+ "net/http"
+ "net/http/httptest"
+ "net/url"
  "strings"
  "testing"
 )
@@ -57,4 +60,23 @@ func TestDedupAcrossSourcesAndLinks(t *testing.T) {
  s.Link(KindOrg,"Example Org","official website",KindHost,host,EvIndication,"test")
  s.Link(KindOrg,"Example Org","official website",KindHost,host,EvIndication,"test")
  if len(s.edges)!=1 {t.Fatal("duplicate graph edges were not removed")}
+}
+
+func TestOSMIdentifiedRequest(t *testing.T) {
+    calls:=0
+    srv:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+       calls++
+       if !strings.Contains(r.Header.Get("User-Agent"),"FlipperOne-OSINT/1.3") {
+         t.Errorf("Nominatim requires an identifiable User-Agent, got %q",r.Header.Get("User-Agent"))
+       }
+       if r.URL.Query().Get("q")!="Berlin Alexanderplatz" {
+         t.Errorf("wrong query: %s",r.URL.RawQuery)
+       }
+       w.Header().Set("Content-Type","application/json")
+       _,_ = w.Write([]byte(`[{"place_id":123,"display_name":"Alexanderplatz, Berlin","lat":"52.521","lon":"13.414"}]`))
+    }))
+    defer srv.Close()
+    var found []osmHit
+    err:=osmRequest(srv.URL,url.Values{"q":{"Berlin Alexanderplatz"}},&found)
+    if err!=nil||calls!=1||len(found)!=1 {t.Fatalf("geocoder test: calls=%d count=%d error=%v",calls,len(found),err)}
 }
