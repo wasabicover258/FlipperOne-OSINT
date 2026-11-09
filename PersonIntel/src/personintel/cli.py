@@ -1,7 +1,9 @@
 """Headless-Kommandozeile: Status, Faelle, Export/Import, Berichte, Audit-Pruefung.
 
-Bewusst *ohne* Recherche-Befehle: Abfragen erfordern die dokumentierte Zweckpruefung und bei aktiven
-Pruefungen eine gesonderte Bestaetigung und laufen daher ueber die Oberflaeche bzw. die Python-API.
+Bewusst *ohne* Recherche-Befehle als einzelne Unterbefehle: Abfragen erfordern die dokumentierte
+Zweckpruefung und bei aktiven Pruefungen eine gesonderte Bestaetigung. Ein fremdes Vorderteil, das
+diese Bestaetigung beim Menschen einholt, benutzt stattdessen ``personintel-cli bridge``
+(zeilenweises JSON, siehe :mod:`personintel.bridge`).
 """
 
 from __future__ import annotations
@@ -60,6 +62,7 @@ def build_parser() -> argparse.ArgumentParser:
     e.add_argument("-o", "--output")
     i = sub.add_parser("import", help="JSON-Bundle importieren")
     i.add_argument("file")
+    sub.add_parser("bridge", help="Brückenbetrieb: zeilenweises JSON über stdin/stdout (für fremde Oberflächen)")
     r = sub.add_parser("report", help="Bericht erzeugen")
     r.add_argument("case_id")
     r.add_argument("--format", choices=["md", "html", "json"], default="md")
@@ -70,6 +73,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.cmd == "bridge":
+        from .bridge import run_bridge
+        return run_bridge(args.data_dir)
     try:
         eng = _open(args)
     except LockedError as exc:

@@ -47,6 +47,24 @@ def _pump(qapp, n: int = 6):
         qapp.processEvents()
 
 
+def _wait_for(qapp, cond, timeout: float = 10.0) -> bool:
+    """Wartet auf eine Bedingung und verarbeitet dabei Qt-Ereignisse.
+
+    Die kurze Pause ist nötig: Hintergrundaufgaben laufen in echten Threads, die unter Last
+    (vollständige Testsuite) Rechenzeit brauchen. Reines processEvents ohne Pause ergäbe ein
+    flackerndes Ergebnis.
+    """
+    import time
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        qapp.processEvents()
+        if cond():
+            return True
+        time.sleep(0.02)
+    qapp.processEvents()
+    return bool(cond())
+
+
 # ----------------------------------------------------------------- Aufbau
 def test_all_pages_build_and_switch(win, qapp):
     expected = ["dashboard", "cases", "research", "results", "graph", "timeline", "report", "settings"]
@@ -66,10 +84,7 @@ def test_icon_loads(qapp):
 
 def test_dashboard_shows_real_module_status(win, qapp, engine):
     win.ctx.refresh_statuses()
-    for _ in range(80):
-        _pump(qapp)
-        if win.ctx.statuses:
-            break
+    assert _wait_for(qapp, lambda: bool(win.ctx.statuses)), "Modulstatus kam nicht an"
     page = win.pages["dashboard"]
     page.refresh()
     _pump(qapp)
@@ -393,10 +408,7 @@ def test_settings_limits_are_persisted(win, qapp, engine):
 def test_dashboard_toggle_disables_module(win, qapp, engine):
     page = win.pages["dashboard"]
     win.ctx.refresh_statuses()
-    for _ in range(80):
-        _pump(qapp)
-        if win.ctx.statuses:
-            break
+    assert _wait_for(qapp, lambda: bool(win.ctx.statuses)), "Modulstatus kam nicht an"
     page.refresh()
     _pump(qapp)
     page.table.selectRow(0)
@@ -421,17 +433,11 @@ def test_context_runs_work_in_background(qapp, engine):
     # Ergebnisse muessen den GUI-Thread erreichen, auch wenn der Threadpool den Auftrag
     # unmittelbar nach der Ausfuehrung verwirft.
     ctx.run_async(lambda: 21 * 2, got.append)
-    for _ in range(100):
-        _pump(qapp)
-        if got:
-            break
+    assert _wait_for(qapp, lambda: bool(got)), "Ergebnis erreichte den GUI-Thread nicht"
     assert got == [42]
     errors = []
     ctx.run_async(lambda: 1 / 0, lambda _: None, errors.append)
-    for _ in range(100):
-        _pump(qapp)
-        if errors:
-            break
+    assert _wait_for(qapp, lambda: bool(errors)), "Fehlermeldung erreichte den GUI-Thread nicht"
     assert errors and "ZeroDivisionError" in errors[0]
     ctx.shutdown()
 

@@ -9,7 +9,7 @@ woran weitergearbeitet werden kann.
 | Repo | `wasabicover258/FlipperOne-OSINT` |
 | Branch | `dev/personintel-wip` (`main` und alle vorhandenen AppImages unverändert) |
 | Projektordner | `PersonIntel/` |
-| Umfang | ~7.800 Zeilen Code, 166 Tests, alle grün |
+| Umfang | ~7.800 Zeilen Code, 170 Tests, alle grün |
 | Einstieg | `cd PersonIntel && pip install -e '.[dev,ui]' && python -m pytest -q` |
 
 Hinweis zum Ablageort: PersonIntel ist ein **eigenes Projekt** (Linux-Desktop, Python/PySide6) und
@@ -37,7 +37,7 @@ aus. Für ein eigenes Repository genügt es, den Ordner `PersonIntel/` zu versch
   `docs/FUSION.md`. Ein Test prüft die Dokumentation gegen den Code (API-Namen,
   Aufzählungswerte, Austauschformat, Installationsbefehle).
 
-Belegt durch: 166 Tests, ein Ende-zu-Ende-Durchlauf im installierten Paket (Zweckverweigerung,
+Belegt durch: 170 Tests, ein Ende-zu-Ende-Durchlauf im installierten Paket (Zweckverweigerung,
 Abfrage gegen Werkzeug-Attrappe, Prüfvermerk, Graphregel, Bericht, Export/Import,
 Protokollintegrität) sowie Installation in eine frische Umgebung mit beiden Startbefehlen.
 
