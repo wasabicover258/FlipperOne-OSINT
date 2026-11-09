@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=PersonIntel
+GenericName=Personenrecherche
+Comment=Journalistische Personenrecherche mit Belegpflicht und Zweckbindung
+Exec=personintel
+Icon=personintel
+Categories=Office;Utility;
+Terminal=false
+StartupWMClass=PersonIntel
+Keywords=OSINT;Recherche;Journalismus;Verifikation;

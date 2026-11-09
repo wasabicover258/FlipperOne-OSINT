@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>personintel</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>PersonIntel</name>
+  <summary>Journalistische Personenrecherche mit Belegpflicht</summary>
+  <description>
+    <p>
+      PersonIntel bündelt zehn Recherchemodule unter einer gemeinsamen Oberfläche. Jede Abfrage
+      erfordert einen dokumentierten Recherchezweck; Abfragen, die fremde Dienste kontaktieren,
+      müssen einzeln bestätigt werden. Jeder Befund trägt eine Belegstufe (unmittelbar belegt,
+      Indiz, unbestätigt) sowie Quelle und Zeitstempel.
+    </p>
+    <p>
+      Alle Daten bleiben lokal und können verschlüsselt, gezielt gelöscht und als Fall exportiert
+      werden. Es werden keine privaten Leak-Datenbanken, keine gestohlenen Zugangsdaten und keine
+      Konto-Übernahmen verwendet.
+    </p>
+  </description>
+  <launchable type="desktop-id">personintel.desktop</launchable>
+  <provides><binary>personintel</binary></provides>
+  <categories><category>Office</category></categories>
+  <url type="homepage">https://github.com/wasabicover258/FlipperOne-OSINT</url>
+  <developer_name>PersonIntel</developer_name>
+  <content_rating type="oars-1.1"/>
+</component>

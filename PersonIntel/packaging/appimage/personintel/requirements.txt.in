@@ -1,0 +1,4 @@
+# Wird von packaging/build_appimage.sh zu requirements.txt gemacht;
+# @PROJECT@ wird durch den absoluten Pfad des Projekts ersetzt.
+PySide6>=6.6
+@PROJECT@[ui]
