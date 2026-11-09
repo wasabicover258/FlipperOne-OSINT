@@ -6,6 +6,8 @@ import (
  "regexp"
  "strconv"
  "strings"
+ "net/http"
+ "time"
 )
 
 var leiPattern=regexp.MustCompile(`^[A-Z0-9]{20}$`)
@@ -205,7 +207,7 @@ func extraASNRouting(value string){
  endpoint:="https://stat.ripe.net/data/routing-status/data.json?resource="+id
  head("Independent BGP routing evidence (RIPE RIS)")
  var out bgpStatus
- if err:=extraJSON(extraClient,endpoint,&out);err!=nil {extraMsg("RIPE routing status",err);return}
+ if err:=extraJSON(&http.Client{Timeout:9*time.Second},endpoint,&out);err!=nil {extraMsg("RIPE routing status",err);return}
  if out.Data.Resource!="" && out.Data.Resource!=id {
   info("RIPE returned mismatched resource: ignored");return
  }
