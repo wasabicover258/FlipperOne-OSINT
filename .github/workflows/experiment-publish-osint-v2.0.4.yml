@@ -1,13 +1,7 @@
 name: Publish OSINT 2.0.4 ARM64
 # OSINT branding + shelf icon; no changes to reconnaissance algorithms.
+# The released artifact is immutable; create a new version to rebuild.
 on:
-  push:
-    branches:
-      - experiment/chatgpt-v2.0.4-shelf-icon
-    paths:
-      - .github/workflows/experiment-publish-osint-v2.0.4.yml
-      - IntegrationTests/OSINT-ARM64/**
-      - app-ordner/app/**
   workflow_dispatch:
 
 permissions:
