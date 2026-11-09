@@ -5,6 +5,7 @@ on:
       - experiment/chatgpt-v2.0-ai-research
     paths:
       - .github/workflows/experiment-chatgpt-v2.0-live.yml
+      - app-ordner/src/cli/ai_v20_live_test.go
   workflow_dispatch:
 
 permissions:
