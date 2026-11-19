@@ -1,14 +1,24 @@
 name: Sync AppImage to Flipper Emulator
+# Copies the AppImage of a public GitHub Release into the emulator's
+# AppCatalogue. Called by the build after a release, or by hand (latest
+# public release when no tag is given).
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'Public Releases/**'
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: false
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (empty = latest public release)'
+        required: false
+
+permissions:
+  contents: read
 
 env:
-  SOURCE_DIR: "Public Releases"
   TARGET_REPO: wasabicover258/Flipper-Emulator
   TARGET_DIR: AppCatalogue/OSINT
   TARGET_BRANCH: main
@@ -17,21 +27,20 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout OSINT repo
-        uses: actions/checkout@v4
-        with:
-          lfs: true
-
-      - name: Find newest AppImage
-        id: find
+      - name: Download release asset
+        id: dl
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          FILE=$(find "$SOURCE_DIR" -maxdepth 1 -type f -iname '*.AppImage' | sort -V | tail -n 1)
-          if [ -z "$FILE" ]; then
-            echo "No AppImage found in '$SOURCE_DIR'." >&2
-            exit 1
+          mkdir dl && cd dl
+          if [ -z "$TAG" ]; then
+            TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
           fi
-          echo "Found: $FILE"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern '*-aarch64.AppImage'
+          FILE=$(ls *.AppImage | head -n1)
+          echo "Release $TAG -> $FILE"
           echo "file=$FILE" >> "$GITHUB_OUTPUT"
 
       - name: Checkout Flipper-Emulator repo
@@ -45,18 +54,18 @@ jobs:
 
       - name: Replace old AppImage
         env:
-          FILE: ${{ steps.find.outputs.file }}
+          FILE: ${{ steps.dl.outputs.file }}
         run: |
           set -euo pipefail
           mkdir -p "emulator/$TARGET_DIR"
           rm -f emulator/"$TARGET_DIR"/FlipperOne-OSINT-*.AppImage
-          cp "$FILE" "emulator/$TARGET_DIR/"
+          cp "dl/$FILE" "emulator/$TARGET_DIR/"
           chmod +x emulator/"$TARGET_DIR"/*.AppImage
 
       - name: Commit and push
         working-directory: emulator
         env:
-          FILE: ${{ steps.find.outputs.file }}
+          FILE: ${{ steps.dl.outputs.file }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -66,5 +75,5 @@ jobs:
             echo "No change, nothing to push."
             exit 0
           fi
-          git commit -m "AppCatalogue: update to $(basename "$FILE")"
+          git commit -m "AppCatalogue: update to $FILE"
           git push origin "$TARGET_BRANCH"

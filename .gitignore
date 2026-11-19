@@ -1,0 +1,4 @@
+# Build output: AppImages are published as GitHub Releases, not committed
+*.AppImage
+/app-ordner/app/FlipperOneOSINT.AppDir/usr/bin/
+/app-ordner/src/cli/flipperone-osint

@@ -1,10 +1,21 @@
-name: Build AppImage (DevBuilds)
-# Builds UI (C/SDL2) + backend (Go) natively on ARM64 and packs an AppImage into DevBuilds.
-# New version = change the file app-ordner/VERSION (and push).
+name: Build AppImage
+# Reproducible builds: every AppImage maps to exactly one commit.
+#
+#   push / pull request   -> test + build, AppImage kept as workflow artifact
+#   tag vX.Y.Z            -> GitHub Release (public)  + sync to Flipper Emulator
+#   tag vX.Y.Z-dev.N      -> GitHub Pre-release (DevBuild)
+#
+# Tags must match app-ordner/VERSION (without the -dev suffix). Releases are
+# never overwritten: an existing tag fails the build.
 
 on:
   push:
     branches: [main]
+    tags: ['v*']
+    paths:
+      - 'app-ordner/**'
+      - '.github/workflows/**'
+  pull_request:
     paths:
       - 'app-ordner/**'
   workflow_dispatch:
@@ -15,30 +26,46 @@ permissions:
 env:
   APPDIR: app-ordner/app/FlipperOneOSINT.AppDir
   ARCH: aarch64
-  OUT_DIR: DevBuilds
 
 jobs:
   build:
     runs-on: ubuntu-24.04-arm
+    outputs:
+      prerelease: ${{ steps.ver.outputs.prerelease }}
+      file: ${{ steps.ver.outputs.file }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Determine version and file name
+      - name: Determine version
         id: ver
         run: |
           VER=$(tr -d ' \r\n' < app-ordner/VERSION)
-          OUT="$OUT_DIR/FlipperOne-OSINT-${VER}-${ARCH}.AppImage"
-          echo "Version: $VER -> $OUT"
-          if [ -e "$OUT" ]; then
-            echo "ERROR: $OUT already exists. Please increase app-ordner/VERSION." >&2
-            exit 1
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/v}"
+            BASE="${TAG%%-*}"
+            if [ "$BASE" != "$VER" ]; then
+              echo "ERROR: tag v$TAG does not match app-ordner/VERSION $VER" >&2
+              exit 1
+            fi
+            VER="$TAG"
+            [[ "$TAG" == *-* ]] && echo "prerelease=true" >> "$GITHUB_OUTPUT" || echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            VER="${VER}+${GITHUB_SHA::7}"
           fi
+          FILE="FlipperOne-OSINT-${VER}-${ARCH}.AppImage"
+          echo "Version: $VER -> $FILE"
           echo "version=$VER" >> "$GITHUB_OUTPUT"
-          echo "out=$OUT" >> "$GITHUB_OUTPUT"
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-go@v5
         with:
           go-version: '1.22'
+
+      - name: Test backend (recorded fixtures, no live services)
+        working-directory: app-ordner/src/cli
+        run: |
+          go vet ./...
+          go test -race -count=1 ./...
 
       - name: Build backend (Go, static)
         env:
@@ -63,13 +90,20 @@ jobs:
           for f in osint-ui osint-cli; do
             readelf -h "$APPDIR/usr/bin/$f" | grep -q AArch64 || { echo "ERROR: $f is not ARM64" >&2; exit 1; }
           done
-          echo "Libraries needed by the UI:"
           readelf -d "$APPDIR/usr/bin/osint-ui" | grep NEEDED
           MAXG=$(objdump -T "$APPDIR/usr/bin/osint-ui" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n1)
           echo "Highest GLIBC version: $MAXG"
           [ "$(printf '%s\nGLIBC_2.34\n' "$MAXG" | sort -V | tail -n1)" = "GLIBC_2.34" ] || { echo "ERROR: GLIBC > 2.34" >&2; exit 1; }
+          ls -l "$APPDIR/usr/bin/"
           "$APPDIR/usr/bin/osint-cli" version
           "$APPDIR/usr/bin/osint-cli" phone "0171 1234567"
+          "$APPDIR/usr/bin/osint-cli" modules
+
+      - name: Smoke test against live services (informational)
+        continue-on-error: true
+        run: |
+          "$APPDIR/usr/bin/osint-cli" deep github.com --deadline 90 --exclude lookalike | tee smoke.txt
+          grep -q "^# Hostnames" smoke.txt
 
       - name: Fetch appimagetool
         run: |
@@ -78,22 +112,36 @@ jobs:
 
       - name: Build AppImage
         env:
-          OUT: ${{ steps.ver.outputs.out }}
+          FILE: ${{ steps.ver.outputs.file }}
         run: |
           chmod +x "$APPDIR/AppRun" "$APPDIR/usr/bin/"*
-          mkdir -p "$OUT_DIR"
-          ARCH=aarch64 ./appimagetool --appimage-extract-and-run --no-appstream "$APPDIR" "$OUT"
-          readelf -h "$OUT" | grep -q 'AArch64' || { echo "ERROR: file is not ARM64" >&2; exit 1; }
-          ls -l "$OUT"
+          ARCH=aarch64 ./appimagetool --appimage-extract-and-run --no-appstream "$APPDIR" "$FILE"
+          readelf -h "$FILE" | grep -q 'AArch64' || { echo "ERROR: file is not ARM64" >&2; exit 1; }
+          sha256sum "$FILE" | tee "$FILE.sha256"
 
-      - name: Commit to DevBuilds
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.ver.outputs.file }}
+          path: |
+            ${{ steps.ver.outputs.file }}
+            ${{ steps.ver.outputs.file }}.sha256
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
-          VER: ${{ steps.ver.outputs.version }}
-          OUT: ${{ steps.ver.outputs.out }}
+          GH_TOKEN: ${{ github.token }}
+          FILE: ${{ steps.ver.outputs.file }}
+          PRE: ${{ steps.ver.outputs.prerelease }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$OUT"
-          git commit -m "DevBuild AppImage ${VER} (${ARCH})"
-          git pull --rebase origin main
-          git push origin main
+          TAG="${GITHUB_REF#refs/tags/}"
+          FLAGS=(--title "FlipperOne-OSINT ${TAG#v}" --notes "Built from ${GITHUB_SHA} by ${GITHUB_WORKFLOW} run ${GITHUB_RUN_ID}. See DevBuilds/VERSIONS.md.")
+          [ "$PRE" = "true" ] && FLAGS+=(--prerelease)
+          gh release create "$TAG" "$FILE" "$FILE.sha256" --verify-tag "${FLAGS[@]}"
+
+  sync:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') && needs.build.outputs.prerelease == 'false'
+    uses: ./.github/workflows/sync-appcatalogue.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets: inherit
