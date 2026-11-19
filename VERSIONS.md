@@ -1,14 +1,12 @@
 # FlipperOne-OSINT: versions (newest first)
 
-From 2.2.0 on, builds are **GitHub Releases** created by CI from a Git tag
-(`vX.Y.Z` = release, `vX.Y.Z-dev.N` = pre-release / DevBuild). Every
-AppImage maps to exactly one commit; nothing is overwritten. Older files
-below still live in the repository folders until the migration
-(`tools/migrate-binaries-to-releases.sh`) has run.
+Only the current build is kept in `Public Releases/` (synced to the Flipper
+Emulator). Older AppImages were removed from the repository in 2.2.0; they
+remain reachable through the Git history and the experiment branches.
 
 | Version | Line | Change |
 |---------|------|--------|
-| 2.2.0 | main | **Entity engine** (roadmap phases 0 + 1, plus first items of 2-5). Every module declares input -> output kinds (domain -> hostname/IP/cert/MX ...); new findings flow automatically through matching modules with adjustable depth and scope. Unified finding format (type, value, source, time, confidence, severity). Per-module timeout, rate limit, retries; a slow service no longer blocks the run. Local case store with run history and diff, response cache, API keys in `~/.config/flipperone-osint/keys.env` (`osint-cli modules` shows what is unlocked). Export JSON / Markdown / GraphML / CSV. New modules: subdomain sources (crt.sh, Cert Spotter, Wayback CDX, AlienVault OTX, urlscan, HackerTarget; VirusTotal and SecurityTrails with key), wildcard detection, prefix permutations, **subdomain takeover check** (43 services), **lookalike/typosquatting** detection (dnstwist style, incl. IDN homoglyphs), TLS expiry/trust/legacy-protocol, exposed `.git`/`.env`, Shodan InternetDB, RIPEstat ASN/prefixes/neighbours, **CVE prioritisation with CISA KEV + EPSS**. Attack-surface grade, pivot suggestions, **watch mode** (rescan + changes). UI: new "Deep scan" and "Watch / diff" modes, scrolling menu. Fixes: Exploit.in entry queried GitLab (removed), global 150 s kill replaced by a configurable limit, wrong watchdog comment. Username check now re-tests every hit with a random control name and hides platforms that answer "found" for anything. Go tests with recorded fixtures. |
+| 2.2.0 | main | `FlipperOne-OSINT-2.2.0-aarch64.AppImage`, SHA-256 `afac6097c6b4a4431187e8d06361fe3f7f745d01b6e5531a8205325ed279f9b0`. **Entity engine** (roadmap phases 0 + 1, plus first items of 2-5). Every module declares input -> output kinds (domain -> hostname/IP/cert/MX ...); new findings flow automatically through matching modules with adjustable depth and scope. Unified finding format (type, value, source, time, confidence, severity). Per-module timeout, rate limit, retries; a slow service no longer blocks the run. Local case store with run history and diff, response cache, API keys in `~/.config/flipperone-osint/keys.env` (`osint-cli modules` shows what is unlocked). Export JSON / Markdown / GraphML / CSV. New modules: subdomain sources (crt.sh, Cert Spotter, Wayback CDX, AlienVault OTX, urlscan, HackerTarget; VirusTotal and SecurityTrails with key), wildcard detection, prefix permutations, **subdomain takeover check** (43 services), **lookalike/typosquatting** detection (dnstwist style, incl. IDN homoglyphs), TLS expiry/trust/legacy-protocol, exposed `.git`/`.env`, Shodan InternetDB, RIPEstat ASN/prefixes/neighbours, **CVE prioritisation with CISA KEV + EPSS**. Attack-surface grade, pivot suggestions, **watch mode** (rescan + changes). UI: new "Deep scan" and "Watch / diff" modes, scrolling menu. Fixes: Exploit.in entry queried GitLab (removed), global 150 s kill replaced by a configurable limit, wrong watchdog comment. Username check now re-tests every hit with a random control name and hides platforms that answer "found" for anything. Go tests with recorded fixtures. |
 | 2.0.5 | experiment (ChatGPT) | Alpha-mask shelf icon fix. Source: branch `experiment/chatgpt-v2.0.5-alpha-icon`. Public release at the time. |
 | 2.0.4 | experiment (ChatGPT) | Shelf icon. Branch `experiment/chatgpt-v2.0.4-shelf-icon`. |
 | 2.0.3 | experiment (ChatGPT) | List buttons. Branch `experiment/chatgpt-v2.0.3-list-buttons`. |
@@ -36,4 +34,4 @@ below still live in the repository folders until the migration
 | 0.2.0 | main | Native SDL2 window + Go backend: username, email, phone, domain, IP, name -> username variants. |
 | 0.1.2 | main | App shelf entry (`app.toml`, 14x14 icon), start via `flipctl`. |
 | 0.1.1 | main | First ARM64 build; `--port` and `--no-browser`. |
-| 0.1.0 | main | First skeleton (x86_64, now `DevBuilds/Legacy PC/`). |
+| 0.1.0 | main | First skeleton (x86_64). |

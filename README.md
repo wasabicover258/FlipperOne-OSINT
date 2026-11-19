@@ -4,21 +4,20 @@
 
 Desktop tools like SpiderFoot have more modules. FlipperOne-OSINT aims to win where they cannot: it is **mobile**, works **offline** where possible, and can **watch targets over time**. Person profiling (dossiers, linking names, numbers and accounts) is deliberately out of scope.
 
-> **Current development version: 2.2.0** (entity engine). Last public AppImage: 2.0.5.
+> **Current version: 2.2.0** (entity engine).
 > Builds are for **AArch64 / ARM64** (Flipper One), not for x86-64 PCs.
 
 ## Download
 
-New versions are published as **[GitHub Releases](https://github.com/wasabicover258/FlipperOne-OSINT/releases)**: normal releases are public builds, pre-releases are DevBuilds. Each AppImage is built by CI from one Git tag and comes with a `.sha256` file.
+**[FlipperOne-OSINT-2.2.0-aarch64.AppImage](https://github.com/wasabicover258/FlipperOne-OSINT/raw/refs/heads/main/Public%20Releases/FlipperOne-OSINT-2.2.0-aarch64.AppImage)**
 
-Until the binary migration is done, the last public build is still available at
-[`Public Releases/FlipperOne-OSINT-2.0.5-aarch64.AppImage`](https://github.com/wasabicover258/FlipperOne-OSINT/raw/refs/heads/main/Public%20Releases/FlipperOne-OSINT-2.0.5-aarch64.AppImage).
+`Public Releases/` always holds exactly one file: the current build. Older builds are not kept in the repository (they remain in the Git history).
 
 1. Download `FlipperOne-OSINT-<version>-aarch64.AppImage`.
 2. Import it through the app store or file manager of your Flipper One.
 3. Open **OSINT** from the app shelf.
 
-The public release is synced to the [Flipper Emulator AppCatalogue](https://github.com/wasabicover258/Flipper-Emulator/tree/main/AppCatalogue/OSINT) automatically.
+Whatever lies in `Public Releases/` is synced to the [Flipper Emulator AppCatalogue](https://github.com/wasabicover258/Flipper-Emulator/tree/main/AppCatalogue/OSINT) automatically.
 
 ## What it does
 
@@ -139,14 +138,14 @@ app-ordner/
   src/cli/                     # Go backend: engine (engine.go, finding.go),
                                # modules (mod_*.go), storage, reports, tests
   app/FlipperOneOSINT.AppDir/  # AppRun, app.toml, shelf icon
-tools/migrate-binaries-to-releases.sh   # one-time move of old AppImages to Releases
+Public Releases/               # the one current AppImage -> Flipper Emulator
+VERSIONS.md                    # version history
 ```
 
-**Release flow:** set `app-ordner/VERSION`, commit, then tag. CI (`.github/workflows/build-appimage.yml`) runs `go vet` and the fixture-based tests, builds natively on ARM64, checks architecture and glibc level, packs the AppImage and creates the GitHub Release. A public release is then synced to the emulator.
+**Release flow:** set `app-ordner/VERSION`, commit, then tag. CI (`.github/workflows/build-appimage.yml`) runs `go vet` and the fixture-based tests, builds natively on ARM64, checks architecture and glibc level, packs the AppImage, replaces the file in `Public Releases/` on `main` and syncs it to the emulator. Every other push only builds and tests (AppImage as workflow artifact).
 
 ```bash
-git tag v2.2.0 && git push origin v2.2.0          # public release
-git tag v2.2.0-dev.1 && git push origin v2.2.0-dev.1   # DevBuild (pre-release)
+git tag v2.3.0 && git push origin v2.3.0
 ```
 
 Tests run without network access, using recorded responses:
@@ -155,7 +154,7 @@ Tests run without network access, using recorded responses:
 cd app-ordner/src/cli && go test ./...
 ```
 
-Version history: [`DevBuilds/VERSIONS.md`](DevBuilds/VERSIONS.md).
+Version history: [`VERSIONS.md`](VERSIONS.md).
 
 ## Responsible use
 

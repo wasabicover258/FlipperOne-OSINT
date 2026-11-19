@@ -1,12 +1,11 @@
 name: Build AppImage
-# Reproducible builds: every AppImage maps to exactly one commit.
+# Every AppImage maps to exactly one commit.
 #
-#   push / pull request   -> test + build, AppImage kept as workflow artifact
-#   tag vX.Y.Z            -> GitHub Release (public)  + sync to Flipper Emulator
-#   tag vX.Y.Z-dev.N      -> GitHub Pre-release (DevBuild)
+#   push / pull request -> test + build, AppImage kept as workflow artifact
+#   tag vX.Y.Z          -> AppImage replaces the one in "Public Releases/" on
+#                          main, then it is synced to the Flipper Emulator
 #
-# Tags must match app-ordner/VERSION (without the -dev suffix). Releases are
-# never overwritten: an existing tag fails the build.
+# The tag must match app-ordner/VERSION.
 
 on:
   push:
@@ -30,9 +29,6 @@ env:
 jobs:
   build:
     runs-on: ubuntu-24.04-arm
-    outputs:
-      prerelease: ${{ steps.ver.outputs.prerelease }}
-      file: ${{ steps.ver.outputs.file }}
     steps:
       - uses: actions/checkout@v4
 
@@ -42,13 +38,14 @@ jobs:
           VER=$(tr -d ' \r\n' < app-ordner/VERSION)
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             TAG="${GITHUB_REF#refs/tags/v}"
-            BASE="${TAG%%-*}"
-            if [ "$BASE" != "$VER" ]; then
+            if [ "$TAG" != "$VER" ]; then
               echo "ERROR: tag v$TAG does not match app-ordner/VERSION $VER" >&2
               exit 1
             fi
-            VER="$TAG"
-            [[ "$TAG" == *-* ]] && echo "prerelease=true" >> "$GITHUB_OUTPUT" || echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            if [ -e "Public Releases/FlipperOne-OSINT-${VER}-${ARCH}.AppImage" ]; then
+              echo "ERROR: ${VER} is already published. Increase app-ordner/VERSION." >&2
+              exit 1
+            fi
           else
             VER="${VER}+${GITHUB_SHA::7}"
           fi
@@ -126,22 +123,25 @@ jobs:
             ${{ steps.ver.outputs.file }}
             ${{ steps.ver.outputs.file }}.sha256
 
-      - name: Publish GitHub Release
+      - name: Publish to Public Releases (only this build is kept)
         if: startsWith(github.ref, 'refs/tags/v')
         env:
-          GH_TOKEN: ${{ github.token }}
           FILE: ${{ steps.ver.outputs.file }}
-          PRE: ${{ steps.ver.outputs.prerelease }}
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          FLAGS=(--title "FlipperOne-OSINT ${TAG#v}" --notes "Built from ${GITHUB_SHA} by ${GITHUB_WORKFLOW} run ${GITHUB_RUN_ID}. See DevBuilds/VERSIONS.md.")
-          [ "$PRE" = "true" ] && FLAGS+=(--prerelease)
-          gh release create "$TAG" "$FILE" "$FILE.sha256" --verify-tag "${FLAGS[@]}"
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B main origin/main
+          mkdir -p "Public Releases"
+          git rm -q --ignore-unmatch "Public Releases/"*.AppImage
+          cp "$FILE" "Public Releases/"
+          git add -f "Public Releases/$FILE"
+          git commit -m "Public release ${FILE} (built from ${GITHUB_SHA::7})"
+          git push origin main
 
   sync:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v') && needs.build.outputs.prerelease == 'false'
+    if: startsWith(github.ref, 'refs/tags/v')
     uses: ./.github/workflows/sync-appcatalogue.yml
-    with:
-      tag: ${{ github.ref_name }}
     secrets: inherit
