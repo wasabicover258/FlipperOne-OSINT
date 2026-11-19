@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"regexp"
 	"sort"
@@ -47,7 +49,6 @@ var sites = []site{
 	// Security / hacking
 	{"HackerOne", "https://hackerone.com/{u}", "status", "", "security"},
 	{"TryHackMe", "https://tryhackme.com/p/{u}", "status", "", "security"},
-	{"Exploit.in", "https://gitlab.com/api/v4/users?username={u}", "notbody", "[]", "security"},
 
 	// Writing / blogging
 	{"Medium", "https://medium.com/@{u}", "status", "", "writing"},
@@ -187,7 +188,7 @@ func checkSite(s site, user string) siteResult {
 // profileURL returns the human-readable profile URL (instead of the API URL).
 func profileURL(s site, user string) string {
 	switch s.name {
-	case "GitLab", "Exploit.in":
+	case "GitLab":
 		return "https://gitlab.com/" + user
 	case "HackerNews":
 		return "https://news.ycombinator.com/user?id=" + user
@@ -223,6 +224,14 @@ func profileURL(s site, user string) string {
 	return strings.ReplaceAll(s.url, "{u}", user)
 }
 
+// controlName derives a handle that is guaranteed not to be registered
+// anywhere: random hex, same allowed character set as real handles.
+func controlName(u string) string {
+	b := make([]byte, 8)
+	rand.Read(b)
+	return "zq" + hex.EncodeToString(b) + "x"
+}
+
 func runUsername(u string) {
 	if !validUser.MatchString(u) {
 		warn("Invalid username (2-40 characters: a-z 0-9 . _ -)")
@@ -231,6 +240,7 @@ func runUsername(u string) {
 	head("Username check: %s", u)
 	info("Checking %d public platforms ...", len(sites))
 	info("Hit = name is taken there, not necessarily the same person")
+	info("Each hit is re-checked with a random control name")
 
 	results := make(chan siteResult, len(sites))
 	sem := make(chan struct{}, 12)
@@ -241,7 +251,16 @@ func runUsername(u string) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			results <- checkSite(s, u)
+			r := checkSite(s, u)
+			// False-positive control: a platform that also "finds" a name
+			// that cannot exist proves nothing for the real name either.
+			if r.state == stFound {
+				if c := checkSite(s, controlName(u)); c.state == stFound {
+					r.state = stUnknown
+					r.note = "unreliable"
+				}
+			}
+			results <- r
 		}(s)
 	}
 	go func() {

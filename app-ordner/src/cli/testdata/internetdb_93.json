@@ -1,0 +1,1 @@
+{"cpes":["cpe:/a:apache:http_server:2.4.49"],"hostnames":["www.example.com","unrelated.net"],"ip":"93.184.216.34","ports":[80,443],"tags":[],"vulns":["CVE-2021-41773","CVE-2020-0001"]}

@@ -3,6 +3,12 @@
 set -eu
 APPDIR=${APPDIR:-$(cd "$(dirname "$0")" && pwd)}
 export APPDIR
+# Command-line use without the UI, e.g. for a watch timer:
+#   FlipperOne-OSINT-<ver>-aarch64.AppImage cli watch run
+if [ "${1:-}" = "cli" ]; then
+    shift
+    exec "$APPDIR/usr/bin/osint-cli" "$@"
+fi
 # Outside the panel: hand the bundle to flipctl like a real Flipper app.
 if [ -z "${FLIPCTL_HOSTED:-}" ]; then
     exec flipctl open "${APPIMAGE:-$0}"

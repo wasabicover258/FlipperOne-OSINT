@@ -24,22 +24,16 @@
 #define TABH 14       /* height of the button tab bar at the bottom */
 #define MAXLINES 4000
 #define MAXIN 120
-#define NMODES 5
+#define NMODES 9
+#define MENU_VIS 6 /* menu rows visible at once; the list scrolls */
 
 #ifndef APP_VERSION
 #define APP_VERSION "dev"
 #endif
 
 typedef struct { Uint8 r, g, b; } Color;
-/* Flipper One look: orange (#FF8200) with dark ink */
-static const Color C_BG = {255, 130, 0};
-static const Color C_INK = {34, 17, 0};
-static const Color C_PILL = {232, 112, 0};   /* flat buttons / rows */
-static const Color C_FIELD = {204, 104, 0};  /* text field */
-static const Color C_SOFT = {128, 62, 0};    /* secondary text */
-static const Color C_LIGHT = {255, 176, 80}; /* text on dark */
-static const Color C_GREEN = {10, 110, 30};
-static const Color C_RED = {160, 20, 0};
+/* Grayscale only: the panel tints luminance orange itself (see header). */
+#include "display_palette.h"
 
 /* ---------- 5x8 font (upper and lower case) ---------- */
 typedef struct { char c; const char *r[8]; } Glyph;
@@ -148,6 +142,14 @@ typedef struct {
 } Mode;
 
 static const Mode modes[NMODES] = {
+    {"Deep scan (engine)", "deep", "Domain/IPv4/IPv6/ASN/CVE", "e.g. example.com",
+     "Entity engine: takeover, lookalike,", "KEV/EPSS CVEs, pivots, grade."},
+    {"Watch / diff", "watchscan", "Target to watch", "e.g. example.com",
+     "Rescan a saved target and show", "what changed since the last run."},
+    {"Organisation / LEI", "org", "Organisation or LEI", "e.g. Siemens AG",
+     "GLEIF legal entity, parents and", "official website domains."},
+    {"GPS / place", "geo", "Lat,lon or place", "e.g. 48.137154, 11.575490",
+     "Map links, elevation, time zone,", "nearby public facilities (OSM)."},
     {"Username", "username", "Username", "e.g. maxmuster",
      "Checks the handle on 70+ public", "platforms, grouped by category."},
     {"Email address", "email", "Email address", "e.g. name@example.com",
@@ -156,7 +158,7 @@ static const Mode modes[NMODES] = {
      "Country, format and line type", "(offline). No owner lookup."},
     {"Domain / recon", "domain", "Domain", "e.g. example.com",
      "Full recon, live port/CVE tree,", "entity graph + correlations."},
-    {"IP address", "ip", "IP address", "e.g. 8.8.8.8",
+    {"IP address (v4/v6)", "ip", "IPv4 or IPv6 address", "e.g. 8.8.8.8",
      "rDNS, ASN, RDAP, live port scan +", "banners, software and known CVEs."},
 };
 
@@ -254,6 +256,41 @@ static void pill(int x, int y, int w, int h, Color c) {
     rect(x, y + 2, w, h - 4, c);
 }
 
+/* 1px rounded border matching pill(): white bodies stay visible on the
+ * white page (2.0.3 button style). */
+static void rounded_border(int x, int y, int w, int h, Color c) {
+    if (w < 5 || h < 5) return;
+    rect(x + 2, y, w - 4, 1, c);
+    rect(x + 1, y + 1, 1, 1, c);
+    rect(x + w - 2, y + 1, 1, 1, c);
+    rect(x, y + 2, 1, h - 4, c);
+    rect(x + w - 1, y + 2, 1, h - 4, c);
+    rect(x + 1, y + h - 2, 1, 1, c);
+    rect(x + w - 2, y + h - 2, 1, 1, c);
+    rect(x + 2, y + h - 1, w - 4, 1, c);
+}
+
+/* A button: white body with a black border; selected = inverted. */
+static void button_card(int x, int y, int w, int h, int selected) {
+    if (w < 5 || h < 5) return;
+    pill(x, y, w, h, selected ? C_INK : C_PILL);
+    if (!selected) rounded_border(x, y, w, h, C_INK);
+}
+
+/* Status by shape: + filled square, - hollow square, ! exclamation mark. */
+static void marker_glyph(int x, int y, char m, Color c) {
+    if (m == '+') rect(x, y, 3, 3, c);
+    else if (m == '-') {
+        rect(x, y, 3, 1, C_SOFT);
+        rect(x, y + 2, 3, 1, C_SOFT);
+        rect(x, y + 1, 1, 1, C_SOFT);
+        rect(x + 2, y + 1, 1, 1, C_SOFT);
+    } else if (m == '!') {
+        rect(x + 1, y - 2, 1, 4, c);
+        rect(x + 1, y + 3, 1, 1, c);
+    }
+}
+
 static void put_char(int x, int y, char c, Color col) {
     if (c < 32 || c > 126) c = '?';
     int idx = c - 32;
@@ -285,6 +322,7 @@ static void title(const char *right) {
     text_bold(17, 3, "OSINT", C_INK);
     int rl = (int)strlen(right);
     text_px(W - 6 - rl * CW, 3, right, C_SOFT);
+    rect(4, 13, W - 8, 1, C_INK); /* thin divider above lists */
 }
 
 /* The 5 Flipper buttons below the screen = 5 tab slots (Z X C V B).
@@ -293,9 +331,9 @@ static void title(const char *right) {
 static void tab(int slot, const char *s, int primary) {
     if (!s || !*s) return;
     int x = 2 + slot * SLOTW, w = SLOTW - 4, y = H - TABH;
-    pill(x, y, w, TABH + 6, primary ? C_INK : C_PILL); /* bottom part is clipped */
+    button_card(x, y, w, TABH - 1, primary);
     int tw = (int)strlen(s) * CW;
-    text_px(x + (w - tw) / 2, y + 3, s, primary ? C_LIGHT : C_INK);
+    text_px(x + (w - tw) / 2, y + 2, s, primary ? C_LIGHT : C_INK);
 }
 
 static void softkeys(const char *z, const char *x, const char *v, const char *b) {
@@ -810,8 +848,14 @@ static void on_key(const SDL_KeyboardEvent *k, char *kbuf) {
 }
 
 #define MENU_Y0 17
-#define MENU_P 18
-#define MENU_H 15
+#define MENU_P 15 /* row pitch: 13px button + 2px gap */
+#define MENU_H 13
+
+/* first visible menu row: keeps the selection inside the visible window */
+static int menu_top(void) {
+    int top = sel - (MENU_VIS - 1);
+    return top < 0 ? 0 : top;
+}
 
 static void on_click(int px, int py) {
     int ww = W, wh = H;
@@ -828,8 +872,9 @@ static void on_click(int px, int py) {
         return;
     }
     if (screen == S_MENU) {
-        int i = (y - MENU_Y0 + 2) / MENU_P;
-        if (y >= MENU_Y0 - 2 && i >= 0 && i < NMODES) { sel = i; activate(sel); }
+        int r = (y - MENU_Y0 + 2) / MENU_P;
+        int i = menu_top() + r;
+        if (y >= MENU_Y0 - 2 && r >= 0 && r < MENU_VIS && i < NMODES) { sel = i; activate(sel); }
     } else if (screen == S_RUN && run_view == RV_OVERVIEW && y >= HDR) {
         int r = (y - HDR) / CH;
         int i = sec_view + r;
@@ -870,12 +915,22 @@ static void on_wheel(int dy) {
 /* ---------- screens ---------- */
 static void draw_menu(void) {
     title("v" APP_VERSION);
-    for (int i = 0; i < NMODES; i++) {
-        int y = MENU_Y0 + i * MENU_P;
+    int top = menu_top();
+    for (int i = top; i < NMODES && i < top + MENU_VIS; i++) {
+        int y = MENU_Y0 + (i - top) * MENU_P;
         int on = (i == sel);
-        pill(6, y, W - 12, MENU_H, on ? C_INK : C_PILL);
-        text_px(14, y + 4, modes[i].label, on ? C_LIGHT : C_INK);
-        if (on) text_px(W - 20, y + 4, ">", C_LIGHT);
+        button_card(6, y, W - 15, MENU_H, on);
+        /* side indicator + permanent chevron: rows read as buttons */
+        rect(11, y + 5, 2, 3, on ? C_LIGHT : C_INK);
+        text_px(17, y + 3, modes[i].label, on ? C_LIGHT : C_INK);
+        text_px(W - 22, y + 3, ">", on ? C_LIGHT : C_INK);
+    }
+    if (NMODES > MENU_VIS) { /* scrollbar: more entries above/below */
+        int track = MENU_VIS * MENU_P - 2;
+        int th = track * MENU_VIS / NMODES;
+        int ty = MENU_Y0 + (track - th) * top / (NMODES - MENU_VIS);
+        rect(W - 4, MENU_Y0, 1, track, C_SOFT);
+        rect(W - 5, ty, 3, th, C_INK);
     }
     text_px(8, 111, modes[sel].d1, C_SOFT);
     text_px(8, 120, modes[sel].d2, C_SOFT);
@@ -890,7 +945,7 @@ static void draw_osk(void) {
             int focus = (r == kb_r && i == kb_c);
             int flash = (r == flash_row && i == flash_col && SDL_GetTicks() < flash_until);
             int dark = focus || flash || (k->kind == K_SHIFT && shift_on);
-            pill(k->x, y, k->w, 16, dark ? C_INK : C_PILL);
+            button_card(k->x, y, k->w, 16, dark);
             const char *lab;
             char one[2] = {k->ch, 0};
             if (k->kind == K_CHAR && shift_on && k->ch >= 'a' && k->ch <= 'z') one[0] = (char)(k->ch - 32);
@@ -911,6 +966,7 @@ static void draw_input(void) {
     const Mode *m = &modes[mode_idx];
     title(m->prompt);
     pill(6, 17, W - 12, 17, C_FIELD);
+    rounded_border(6, 17, W - 12, 17, C_INK);
     const char *in = inputs[mode_idx];
     int l = (int)strlen(in);
     int vis = (W - 28) / CW;
@@ -935,16 +991,14 @@ static void draw_lines(int from, int to) {
         int y = HDR + r * CH + 1;
         const Line *ln = &lines[i];
         char mk = ln->t[0];
-        if (ln->kind == 4) {
-            pill(4, y - 1, W - 12, CH + 1, C_FIELD);
-            text_bold(10, y, ln->t + 2, C_INK);
+        if (ln->kind == 4) { /* section header: bold text on a framed strip */
+            rect(4, y + CH - 1, W - 12, 1, C_INK);
+            text_bold(6, y, ln->t + 2, C_INK);
             continue;
         }
-        Color tc = ln->kind == 2 ? C_SOFT : (ln->kind == 3 ? C_RED : C_INK);
-        if (mk == '+') rect(5, y + 2, 3, 3, C_GREEN);
-        else if (mk == '-') rect(5, y + 2, 3, 3, C_SOFT);
-        else if (mk == '!') rect(5, y + 2, 3, 3, C_RED);
-        text_px(12, y, ln->t + 2, tc);
+        marker_glyph(5, y + 2, mk, C_INK);
+        if (ln->kind == 3) text_bold(12, y, ln->t + 2, C_INK); /* warnings: bold */
+        else text_px(12, y, ln->t + 2, ln->kind == 2 ? C_SOFT : C_INK);
     }
     int total = to - from;
     if (total > VH) {
@@ -953,20 +1007,20 @@ static void draw_lines(int from, int to) {
         if (th < 6) th = 6;
         int mx = total - VH;
         int ty = HDR + (track - th) * (scroll_pos - from) / (mx > 0 ? mx : 1);
-        rect(W - 3, HDR, 1, track, C_FIELD);
+        rect(W - 3, HDR, 1, track, C_SOFT);
         rect(W - 4, ty, 3, th, C_INK);
     }
 }
 
-/* Worst-severity dot for a section's lines: red warning, else green finding. */
-static void sev_dot(int x, int y, int st, int en) {
+/* Worst status of a section's lines as a shape: ! warning, + finding, - none. */
+static void sev_dot(int x, int y, int st, int en, Color c) {
     int bang = 0, ok = 0;
     for (int i = st; i < en; i++) {
         char m = lines[i].t[0];
         if (m == '!') bang = 1;
         else if (m == '+') ok = 1;
     }
-    rect(x, y, 3, 3, bang ? C_RED : (ok ? C_GREEN : C_SOFT));
+    marker_glyph(x, y, bang ? '!' : (ok ? '+' : '-'), c);
 }
 
 static void draw_full(void) {
@@ -1006,7 +1060,7 @@ static void draw_overview(void) {
         secRange(i, &st, &en);
         int sel = (i == sec_sel);
         if (sel) pill(2, y - 1, W - 6, CH + 1, C_INK);
-        sev_dot(6, y + 2, st + 1, en);
+        sev_dot(6, y + 2, st + 1, en, sel ? C_LIGHT : C_INK);
         text_px(12, y, lines[st].t + 2, sel ? C_LIGHT : C_INK);
         int plus = 0, bang = 0;
         for (int k = st + 1; k < en; k++) {
@@ -1018,7 +1072,7 @@ static void draw_overview(void) {
         if (bang) snprintf(cnt, sizeof cnt, "+%d !%d", plus, bang);
         else snprintf(cnt, sizeof cnt, "%d", en - st - 1);
         int cw = (int)strlen(cnt) * CW;
-        text_px(W - 8 - cw, y, cnt, bang ? C_RED : (sel ? C_LIGHT : C_SOFT));
+        text_px(W - 8 - cw, y, cnt, sel ? C_LIGHT : (bang ? C_INK : C_SOFT));
     }
     if (nsec > VH) {
         int track = VH * CH;
@@ -1026,7 +1080,7 @@ static void draw_overview(void) {
         if (th < 6) th = 6;
         int mx = nsec - VH;
         int ty = HDR + (track - th) * sec_view / (mx > 0 ? mx : 1);
-        rect(W - 3, HDR, 1, track, C_FIELD);
+        rect(W - 3, HDR, 1, track, C_SOFT);
         rect(W - 4, ty, 3, th, C_INK);
     }
     softkeys("Exit", "All", "Refresh", "Again");

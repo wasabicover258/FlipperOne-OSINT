@@ -233,13 +233,3 @@ func correlate(domain string, ips []string, ipHosts map[string][]string, data []
 		}
 	}
 }
-
-// registrableDomain returns the last two labels of a host (a rough eTLD+1).
-func registrableDomain(host string) string {
-	host = strings.Trim(host, ".")
-	parts := strings.Split(host, ".")
-	if len(parts) < 2 {
-		return ""
-	}
-	return strings.Join(parts[len(parts)-2:], ".")
-}
