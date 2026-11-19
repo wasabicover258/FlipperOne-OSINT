@@ -24,7 +24,8 @@
 #define TABH 14       /* height of the button tab bar at the bottom */
 #define MAXLINES 4000
 #define MAXIN 120
-#define NMODES 5
+#define NMODES 7
+#define MENU_VIS 5 /* menu rows visible at once; the list scrolls */
 
 #ifndef APP_VERSION
 #define APP_VERSION "dev"
@@ -148,6 +149,10 @@ typedef struct {
 } Mode;
 
 static const Mode modes[NMODES] = {
+    {"Deep scan (engine)", "deep", "Domain/IP/ASN/CVE", "e.g. example.com",
+     "Entity engine: takeover, lookalike,", "KEV/EPSS CVEs, pivots, grade."},
+    {"Watch / diff", "watchscan", "Target to watch", "e.g. example.com",
+     "Rescan a saved target and show", "what changed since the last run."},
     {"Username", "username", "Username", "e.g. maxmuster",
      "Checks the handle on 70+ public", "platforms, grouped by category."},
     {"Email address", "email", "Email address", "e.g. name@example.com",
@@ -813,6 +818,12 @@ static void on_key(const SDL_KeyboardEvent *k, char *kbuf) {
 #define MENU_P 18
 #define MENU_H 15
 
+/* first visible menu row: keeps the selection inside the visible window */
+static int menu_top(void) {
+    int top = sel - (MENU_VIS - 1);
+    return top < 0 ? 0 : top;
+}
+
 static void on_click(int px, int py) {
     int ww = W, wh = H;
     SDL_GetWindowSize(win, &ww, &wh);
@@ -828,8 +839,9 @@ static void on_click(int px, int py) {
         return;
     }
     if (screen == S_MENU) {
-        int i = (y - MENU_Y0 + 2) / MENU_P;
-        if (y >= MENU_Y0 - 2 && i >= 0 && i < NMODES) { sel = i; activate(sel); }
+        int r = (y - MENU_Y0 + 2) / MENU_P;
+        int i = menu_top() + r;
+        if (y >= MENU_Y0 - 2 && r >= 0 && r < MENU_VIS && i < NMODES) { sel = i; activate(sel); }
     } else if (screen == S_RUN && run_view == RV_OVERVIEW && y >= HDR) {
         int r = (y - HDR) / CH;
         int i = sec_view + r;
@@ -870,13 +882,16 @@ static void on_wheel(int dy) {
 /* ---------- screens ---------- */
 static void draw_menu(void) {
     title("v" APP_VERSION);
-    for (int i = 0; i < NMODES; i++) {
-        int y = MENU_Y0 + i * MENU_P;
+    int top = menu_top();
+    for (int i = top; i < NMODES && i < top + MENU_VIS; i++) {
+        int y = MENU_Y0 + (i - top) * MENU_P;
         int on = (i == sel);
         pill(6, y, W - 12, MENU_H, on ? C_INK : C_PILL);
         text_px(14, y + 4, modes[i].label, on ? C_LIGHT : C_INK);
         if (on) text_px(W - 20, y + 4, ">", C_LIGHT);
     }
+    if (top > 0) text_px(W - 12, 111, "^", C_SOFT);                /* more above */
+    if (top + MENU_VIS < NMODES) text_px(W - 12, 120, "v", C_SOFT); /* more below */
     text_px(8, 111, modes[sel].d1, C_SOFT);
     text_px(8, 120, modes[sel].d2, C_SOFT);
     softkeys("Exit", NULL, NULL, "Open");

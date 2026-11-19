@@ -1,8 +1,10 @@
 // osint-cli: backend of FlipperOne-OSINT.
-// Usage: osint-cli <type> <value>
-// Types: username, email, phone, domain, ip
-// Output: one line per result, first character = marker:
+// Run without arguments for usage. Classic modes print one line per
+// result, first character = marker:
 //   - found   - not found   ! warning/unclear   i info   # section heading
+//
+// The engine modes (deep, watch) work on structured findings (finding.go)
+// and render them in the same marker format for the UI, or as JSON.
 package main
 
 import (
@@ -12,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -103,8 +106,11 @@ func main() {
 		fmt.Println(Version)
 		return
 	}
+	if len(os.Args) >= 2 && engineCommands[strings.ToLower(os.Args[1])] {
+		os.Exit(runEngineCommand(strings.ToLower(os.Args[1]), os.Args[2:]))
+	}
 	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "Usage: osint-cli <username|email|phone|domain|ip> <value>")
+		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(2)
 	}
 	typ := strings.ToLower(os.Args[1])
@@ -114,10 +120,14 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Safety net: stop after 100 seconds.
+	// Watchdog for the classic modes: hard stop after OSINT_TIMEOUT seconds
+	// (default 300). The engine commands (deep, watch, ...) use per-module
+	// timeouts and a soft deadline instead, so one slow service can no
+	// longer kill a whole run.
+	limit := envInt("OSINT_TIMEOUT", 300)
 	go func() {
-		time.Sleep(150 * time.Second)
-		warn("Aborted: time limit reached (150s)")
+		time.Sleep(time.Duration(limit) * time.Second)
+		warn("Aborted: time limit reached (%ds, set OSINT_TIMEOUT to change)", limit)
 		os.Exit(0)
 	}()
 
@@ -135,6 +145,20 @@ func main() {
 	default:
 		warn("Unknown type: %s", typ)
 	}
+}
+
+const usage = `Usage:
+  osint-cli <username|email|phone|domain|ip> <value>   classic report
+  osint-cli deep <target> [flags]                       entity engine scan
+  osint-cli watch <add|rm|list|run|scan> [target]       monitoring
+  osint-cli cases | export <case> <json|md|graphml|csv> [file]
+  osint-cli modules | update-data | version`
+
+func envInt(name string, def int) int {
+	if v, err := strconv.Atoi(os.Getenv(name)); err == nil && v > 0 {
+		return v
+	}
+	return def
 }
 
 // ipsOf resolves a name to IP addresses.
