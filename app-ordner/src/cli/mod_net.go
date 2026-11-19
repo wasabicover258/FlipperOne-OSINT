@@ -29,7 +29,7 @@ type internetDB struct {
 
 func emitHostData(out *Out, ip, source string, r internetDB) {
 	for _, p := range r.Ports {
-		out.Add(Finding{Type: KPort, Value: ip + ":" + strconv.Itoa(p) + "/tcp", Source: source, Confidence: 75})
+		out.Add(Finding{Type: KPort, Value: net.JoinHostPort(ip, strconv.Itoa(p)) + "/tcp", Source: source, Confidence: 75})
 	}
 	for _, c := range r.Cpes {
 		out.Add(Finding{Type: KCPE, Value: c, Source: source, Confidence: 70, Detail: "on " + ip})
@@ -57,6 +57,9 @@ var modInternetDB = &Module{
 	Name: "internetdb", Desc: "Shodan InternetDB: ports, CPEs, CVEs (free)",
 	In: []Kind{KIP}, Out: []Kind{KPort, KCPE, KCVE, KHost, KIssue}, Timeout: 15 * time.Second, Retries: 2, Rate: 300 * time.Millisecond,
 	Run: func(ctx context.Context, in Finding, out *Out) error {
+		if !publicIP(in.Value) {
+			return nil
+		}
 		var r internetDB
 		err := getJSON(ctx, "https://internetdb.shodan.io/"+in.Value, nil, 12*time.Hour, &r)
 		if err != nil {
@@ -71,6 +74,9 @@ var modShodanHost = &Module{
 	Name: "shodan", Desc: "Shodan host API (full data)", Key: "SHODAN_API_KEY",
 	In: []Kind{KIP}, Out: []Kind{KPort, KCPE, KCVE, KHost}, Timeout: 20 * time.Second, Rate: time.Second,
 	Run: func(ctx context.Context, in Finding, out *Out) error {
+		if !publicIP(in.Value) {
+			return nil
+		}
 		var r struct {
 			Ports     []int    `json:"ports"`
 			Hostnames []string `json:"hostnames"`
@@ -101,6 +107,9 @@ var modRIPE = &Module{
 	Name: "ripestat", Desc: "IP -> ASN and routed prefix (RIPEstat/BGP)",
 	In: []Kind{KIP}, Out: []Kind{KASN, KNetblock}, Timeout: 20 * time.Second, Retries: 1,
 	Run: func(ctx context.Context, in Finding, out *Out) error {
+		if !publicIP(in.Value) {
+			return nil
+		}
 		var r struct {
 			Data struct {
 				Resource string `json:"resource"`
@@ -125,8 +134,8 @@ var modRIPE = &Module{
 }
 
 var modASNPrefixes = &Module{
-	Name: "asn-prefixes", Desc: "ASN -> announced prefixes, upstreams, peers, size",
-	In: []Kind{KASN}, Out: []Kind{KNetblock, KASN}, Timeout: 30 * time.Second, Retries: 1,
+	Name: "asn-prefixes", Desc: "ASN -> holder, announced v4/v6 prefixes, upstreams, peers, size",
+	In: []Kind{KASN}, Out: []Kind{KNetblock, KASN, KOrg}, Timeout: 30 * time.Second, Retries: 1,
 	Run: func(ctx context.Context, in Finding, out *Out) error {
 		asn := strings.TrimPrefix(strings.ToUpper(in.Value), "AS")
 		var pr struct {
@@ -140,18 +149,40 @@ var modASNPrefixes = &Module{
 			return err
 		}
 		var v4 uint64
+		var n4, n6, v6x48 int
 		for i, p := range pr.Data.Prefixes {
-			if _, n, err := net.ParseCIDR(p.Prefix); err == nil && n.IP.To4() != nil {
+			if _, n, err := net.ParseCIDR(p.Prefix); err == nil {
 				ones, _ := n.Mask.Size()
-				v4 += 1 << (32 - ones)
+				if n.IP.To4() != nil {
+					n4++
+					v4 += 1 << (32 - ones)
+				} else {
+					n6++
+					if ones <= 48 && 48-ones < 30 {
+						v6x48 += 1 << (48 - ones)
+					}
+				}
 			}
 			if i < 200 {
 				out.Add(Finding{Type: KNetblock, Value: p.Prefix, Source: "ripestat", Confidence: 90, Detail: "announced by AS" + asn})
 			}
 		}
 		out.Add(Finding{Type: KIssue, Value: fmt.Sprintf("AS%s network size", asn), Severity: SevInfo, Source: "ripestat",
-			Detail: fmt.Sprintf("%d prefixes, %d IPv4 addresses", len(pr.Data.Prefixes), v4),
+			Detail: fmt.Sprintf("%d prefixes (%d IPv4, %d IPv6), %d IPv4 addresses, %d IPv6 /48s", len(pr.Data.Prefixes), n4, n6, v4, v6x48),
 			Data:   map[string]string{"check": "asn"}})
+
+		// Seeds and peers arrive without a holder name: ask RIPEstat.
+		if in.Data["holder"] == "" {
+			var ov struct {
+				Data struct {
+					Holder string `json:"holder"`
+				} `json:"data"`
+			}
+			if getJSON(ctx, "https://stat.ripe.net/data/as-overview/data.json?resource=AS"+asn, nil, 7*day, &ov) == nil && ov.Data.Holder != "" {
+				out.Add(Finding{Type: KOrg, Value: ov.Data.Holder, Source: "ripestat", Confidence: 90,
+					Detail: "holder of AS" + asn, Data: map[string]string{"relation": "AS holder"}})
+			}
+		}
 
 		var nb struct {
 			Data struct {

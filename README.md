@@ -24,7 +24,7 @@ The public release is synced to the [Flipper Emulator AppCatalogue](https://gith
 
 ### Deep scan (entity engine)
 
-Enter a **domain, hostname, IP, ASN (`AS15169`) or CVE**. The engine works like SpiderFoot/Maltego: every module declares what it consumes and what it produces, and every new finding automatically runs through all matching modules, within a scope (the target's registrable domain) and a depth limit.
+Enter a **domain, hostname, IPv4/IPv6 address, ASN (`AS15169`), CVE, LEI or coordinate**. The engine works like SpiderFoot/Maltego: every module declares what it consumes and what it produces, and every new finding automatically runs through all matching modules, within a scope (the target's registrable domain) and a depth limit.
 
 ```text
 domain ──> subdomains ──> IPs ──> ports / software / CVEs ──> KEV + EPSS priority
@@ -40,8 +40,18 @@ domain ──> subdomains ──> IPs ──> ports / software / CVEs ──> KE
 | Takeover | Dangling CNAMEs to 43 services (GitHub Pages, S3, Azure, Heroku, Shopify, Fastly ...): NXDOMAIN and "not found" fingerprints |
 | Brand protection | dnstwist-style lookalikes: omission, repetition, transposition, keyboard typos, homoglyphs incl. IDN/punycode, bitsquatting, hyphenation, TLD swap; checked for NS, website and **mail server** |
 | Web / TLS | Certificate expiry and trust, SAN hostnames, legacy TLS 1.0/1.1, exposed `.git` / `.env` / `.svn` / `server-status`, `security.txt` |
-| Network | Shodan InternetDB (ports, CPEs, CVEs without scanning), RIPEstat IP -> ASN/prefix, ASN -> all prefixes, upstreams, peers, size; with key: Shodan host API |
+| Network | Shodan InternetDB (ports, CPEs, CVEs without scanning), RIPEstat IP -> ASN/prefix, ASN -> holder, all v4/v6 prefixes, upstreams, peers, size; reverse DNS (in-addr.arpa and ip6.arpa); ipwho.is location/ISP estimate; with key: Shodan host API |
+| IPv6 | Canonical form, private/reserved ranges skipped, embedded IPv4 of 6to4 / Teredo / NAT64 addresses followed, EUI-64 (MAC-derived) interface IDs flagged |
+| History | Wayback Machine: historic hostnames (CDX), first and latest archived snapshot |
 | Vulnerabilities | CVEs prioritised with **CISA KEV** (known exploited -> critical) and **EPSS** probability instead of a CVE wall |
+
+### Organisation / LEI
+
+Enter a company name (`org:Siemens AG` on the command line) or a 20-character **LEI**. GLEIF returns the legal entity (legal name, status, jurisdiction, legal and HQ address, BIC) and its **direct and ultimate parent**; Wikidata adds the **official website domains** (by LEI where possible, otherwise by name as a lower-confidence candidate). Domains and parent companies are reported with a "deep ..." pivot suggestion but not scanned automatically. Legal entities only: no officers, employees or owners.
+
+### GPS / place
+
+Enter `lat,lon` (decimal degrees) or a place name / address. You get map links (OpenStreetMap, Google, Bing, `geo:` URI), DMS notation, **elevation** and **time zone / UTC offset** (Open-Meteo), the nearest mapped address (Nominatim), **public facilities within 500 m** - hospitals, clinics, pharmacies, restaurants, shops, offices, schools - strictly nearest first with their public address, phone and website (OSM Overpass, two servers), and nearby Wikipedia articles. Public map features only: no residents, owners or visitors.
 
 The result starts with an **attack-surface summary** (grade A-F, findings by severity), **pivot suggestions** ("this IP links to 29 entities - deep 1.2.3.4"), then all entities by category. Every finding has a type, value, source, timestamp, confidence and severity.
 
@@ -71,8 +81,10 @@ The result starts with an **attack-surface summary** (grade A-F, findings by sev
 The backend also runs without the UI: `FlipperOne-OSINT-<version>-aarch64.AppImage cli <command>` (or `osint-cli` from an extracted AppImage):
 
 ```text
-osint-cli deep <domain|host|ip|ASN|CVE> [--depth 4] [--deadline 240] [--json]
-                                        [--modules a,b] [--exclude a,b] [--fresh]
+osint-cli deep <domain|host|ip|ASN|CVE|LEI|lat,lon|org:name|place:name>
+              [--depth 4] [--deadline 240] [--json] [--modules a,b] [--exclude a,b] [--fresh]
+osint-cli org <name|LEI>                        # = deep org:<name>
+osint-cli geo <lat,lon|place>                   # = deep <lat,lon> / place:<name>
 osint-cli watch add|rm|list|scan|run [target]   # run: exit code 3 = alerts
 osint-cli cases                                 # saved cases
 osint-cli export <case> json|md|graphml|csv [file]

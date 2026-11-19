@@ -150,6 +150,7 @@ func main() {
 const usage = `Usage:
   osint-cli <username|email|phone|domain|ip> <value>   classic report
   osint-cli deep <target> [flags]                       entity engine scan
+  osint-cli org <name|LEI> | geo <lat,lon|place>        organisation / location scan
   osint-cli watch <add|rm|list|run|scan> [target]       monitoring
   osint-cli cases | export <case> <json|md|graphml|csv> [file]
   osint-cli modules | update-data | version`

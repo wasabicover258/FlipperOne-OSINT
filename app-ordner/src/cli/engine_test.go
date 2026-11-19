@@ -40,16 +40,22 @@ func (fn *fakeNet) fetch(ctx context.Context, u string, hdr map[string]string) (
 		b, _ := json.Marshal(rep)
 		return 200, b, nil
 	}
-	for p, v := range fn.http {
-		if strings.HasPrefix(u, p) {
-			if strings.HasPrefix(v, "@") {
-				b, err := os.ReadFile("testdata/" + v[1:])
-				return 200, b, err
-			}
-			return 200, []byte(v), nil
+	// longest matching prefix wins (map order is random)
+	best := ""
+	for p := range fn.http {
+		if strings.HasPrefix(u, p) && len(p) > len(best) {
+			best = p
 		}
 	}
-	return 404, nil, nil
+	if best == "" {
+		return 404, nil, nil
+	}
+	v := fn.http[best]
+	if strings.HasPrefix(v, "@") {
+		b, err := os.ReadFile("testdata/" + v[1:])
+		return 200, b, err
+	}
+	return 200, []byte(v), nil
 }
 
 func rr(t string, data ...string) []dohAnswer {

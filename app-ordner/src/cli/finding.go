@@ -23,6 +23,11 @@ const (
 	KTech      Kind = "tech"      // web technology
 	KLookalike Kind = "lookalike" // registered typo/homoglyph domain
 	KIssue     Kind = "issue"     // a security problem (never recursed)
+	KOrg       Kind = "org"       // organisation / company name
+	KLEI       Kind = "lei"       // ISO 17442 Legal Entity Identifier
+	KGeo       Kind = "geo"       // coordinate, value = "lat,lon" (6 decimals)
+	KPlace     Kind = "place"     // place name (seed) or mapped OSM feature
+	KAttr      Kind = "attribute" // a property of its parent (elevation, time zone ...), never recursed
 )
 
 // Severity of a finding. Entities are usually SevInfo; issues carry the
@@ -77,7 +82,14 @@ type Finding struct {
 }
 
 // Key identifies an entity independent of where it was found.
-func (f Finding) Key() string { return string(f.Type) + ":" + strings.ToLower(f.Value) }
+// Attributes ("Elevation: 519 m") only make sense with their subject, so
+// their key includes the parent: two IPs may share the same ISP.
+func (f Finding) Key() string {
+	if f.Type == KAttr {
+		return string(f.Type) + ":" + f.Parent + "|" + strings.ToLower(f.Value)
+	}
+	return string(f.Type) + ":" + strings.ToLower(f.Value)
+}
 
 // IsEntity reports whether the finding can be fed into further modules.
-func (f Finding) IsEntity() bool { return f.Type != KIssue }
+func (f Finding) IsEntity() bool { return f.Type != KIssue && f.Type != KAttr }

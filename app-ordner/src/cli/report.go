@@ -87,6 +87,14 @@ func pivots(fs []Finding) []Pivot {
 			if f.Data["relation"] == "" {
 				ps = append(ps, Pivot{f, n, fmt.Sprintf("operator %s %s - deep %s", f.Value, shorten(f.Data["holder"], 24), f.Value)})
 			}
+		case KDomain:
+			if r := f.Data["relation"]; r != "" {
+				ps = append(ps, Pivot{f, n, r + " " + f.Value + " - deep " + f.Value})
+			}
+		case KLEI:
+			if f.Data["relation"] != "" {
+				ps = append(ps, Pivot{f, n, f.Data["relation"] + " " + shorten(f.Data["name"], 24) + " - org " + f.Value})
+			}
 		case KLookalike:
 			if f.Severity >= SevMedium {
 				ps = append(ps, Pivot{f, n, "lookalike with infrastructure - deep " + f.Value})
@@ -111,6 +119,8 @@ var kindLabel = []struct {
 	{KLookalike, "Lookalike domains"}, {KDomain, "Domains"}, {KHost, "Hostnames"}, {KIP, "IP addresses"},
 	{KASN, "Networks (ASN)"}, {KNetblock, "Netblocks"}, {KPort, "Open ports"}, {KCPE, "Software (CPE)"},
 	{KCVE, "CVEs (raw)"}, {KCert, "Certificates"}, {KURL, "URLs"}, {KTech, "Technologies"},
+	{KOrg, "Organisations"}, {KLEI, "Legal entities (LEI)"}, {KGeo, "Coordinates"}, {KPlace, "Places nearby (OSM)"},
+	{KAttr, "Attributes"},
 }
 
 func marker(f Finding) func(string, ...any) {

@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -15,6 +14,7 @@ import (
 )
 
 var engineCommands = map[string]bool{
+	"org": true, "geo": true,
 	"deep": true, "watch": true, "watchscan": true, "cases": true, "export": true, "modules": true, "update-data": true,
 }
 
@@ -23,12 +23,42 @@ var (
 	cveRe = regexp.MustCompile(`(?i)^CVE-\d{4}-\d{4,}$`)
 )
 
-// seedFor detects the entity type of a free-text target.
+// seedFor detects the entity type of a free-text target. Names are
+// ambiguous, so organisations and places need a prefix: "org:Siemens AG",
+// "place:Berlin Alexanderplatz". Coordinates and LEIs are detected.
 func seedFor(raw string) (Finding, error) {
 	v := strings.TrimSpace(raw)
+	if p, rest, ok := strings.Cut(v, ":"); ok && canonicalIP(v) == "" {
+		rest = strings.Join(strings.Fields(rest), " ")
+		switch strings.ToLower(p) {
+		case "org", "company":
+			if len(rest) < 2 || len(rest) > 120 {
+				return Finding{}, fmt.Errorf("organisation name: 2-120 characters")
+			}
+			return Finding{Type: KOrg, Value: rest}, nil
+		case "place", "address":
+			if len(rest) < 3 || len(rest) > 160 {
+				return Finding{}, fmt.Errorf("place: 3-160 characters")
+			}
+			if lat, lon, ok := parseGeo(rest); ok {
+				return Finding{Type: KGeo, Value: geoValue(lat, lon)}, nil
+			}
+			return Finding{Type: KPlace, Value: rest}, nil
+		case "lei":
+			v = rest
+		case "geo":
+			v = rest
+		}
+	}
+	if lat, lon, ok := parseGeo(v); ok {
+		return Finding{Type: KGeo, Value: geoValue(lat, lon)}, nil
+	}
+	if l := strings.ToUpper(strings.ReplaceAll(v, " ", "")); validLEI(l) {
+		return Finding{Type: KLEI, Value: l}, nil
+	}
 	switch {
-	case net.ParseIP(v) != nil:
-		return Finding{Type: KIP, Value: v}, nil
+	case canonicalIP(v) != "":
+		return Finding{Type: KIP, Value: canonicalIP(v)}, nil
 	case asnRe.MatchString(v):
 		return Finding{Type: KASN, Value: strings.ToUpper(v)}, nil
 	case cveRe.MatchString(v):
@@ -36,12 +66,24 @@ func seedFor(raw string) (Finding, error) {
 	}
 	d := normalizeDomain(v)
 	if !domainRe.MatchString(d) {
-		return Finding{}, fmt.Errorf("not a domain, IP, ASN or CVE: %q", raw)
+		return Finding{}, fmt.Errorf("not a domain, IP, ASN, CVE, LEI, coordinate, org:<name> or place:<name>: %q", raw)
 	}
 	if registrableDomain(d) == d {
 		return Finding{Type: KDomain, Value: d}, nil
 	}
 	return Finding{Type: KHost, Value: d}, nil
+}
+
+// seedTarget is the inverse of seedFor: the string that detects as f again
+// (used for watch lists and case names).
+func seedTarget(f Finding) string {
+	switch f.Type {
+	case KOrg:
+		return "org:" + f.Value
+	case KPlace:
+		return "place:" + f.Value
+	}
+	return f.Value
 }
 
 type scanOpts struct {
@@ -106,7 +148,7 @@ func scan(target string, o scanOpts, progress bool) (*Case, Run, *Engine, error)
 	start := time.Now()
 	fs := e.Run(seed)
 	run := Run{Started: start.UTC(), Seconds: time.Since(start).Seconds(), Version: Version, Findings: fs}
-	c, err := saveRun(seed.Value, seed.Type, run)
+	c, err := saveRun(seedTarget(seed), seed.Type, run)
 	if err != nil {
 		warn("Could not save case: %v", err)
 	}
@@ -117,6 +159,18 @@ func runEngineCommand(cmd string, args []string) int {
 	switch cmd {
 	case "deep":
 		return cmdDeep(args)
+	case "org", "geo": // UI shortcuts: osint-cli org "Siemens AG", osint-cli geo "48.1,11.5" | "Marienplatz Munich"
+		if len(args) == 0 {
+			fmt.Fprintf(os.Stderr, "Usage: osint-cli %s <%s> [deep flags]\n", cmd, map[string]string{"org": "organisation name or LEI", "geo": "lat,lon or place name"}[cmd])
+			return 2
+		}
+		t := strings.TrimSpace(args[0])
+		_, _, isGeo := parseGeo(t)
+		isLEI := validLEI(strings.ToUpper(strings.ReplaceAll(t, " ", "")))
+		if !strings.Contains(t, ":") && !(cmd == "org" && isLEI) && !(cmd == "geo" && isGeo) {
+			t = map[string]string{"org": "org:", "geo": "place:"}[cmd] + t
+		}
+		return cmdDeep(append([]string{t}, args[1:]...))
 	case "watch":
 		return cmdWatch(args)
 	case "watchscan": // single-argument form used by the UI
@@ -169,7 +223,7 @@ func cmdDeep(args []string) int {
 	asJSON := fs.Bool("json", false, "print findings as JSON lines")
 	target, rest := splitTarget(args)
 	if fs.Parse(rest) != nil || target == "" {
-		fmt.Fprintln(os.Stderr, "Usage: osint-cli deep <domain|host|ip|ASN|CVE> [--depth 4] [--deadline 240] [--json] [--modules a,b] [--exclude a,b] [--fresh]")
+		fmt.Fprintln(os.Stderr, "Usage: osint-cli deep <domain|host|ip|ASN|CVE|LEI|lat,lon|org:name|place:name> [--depth 4] [--deadline 240] [--json] [--modules a,b] [--exclude a,b] [--fresh]")
 		return 2
 	}
 	if !*asJSON {
@@ -278,14 +332,14 @@ func cmdWatch(args []string) int {
 			return 1
 		}
 		if sub == "add" {
-			ok, err := watchAdd(seed.Value)
+			ok, err := watchAdd(seedTarget(seed))
 			mustf(err, "save watch list")
 			if ok {
 				found("Watching %s", seed.Value)
 			} else {
 				info("%s is already watched", seed.Value)
 			}
-		} else if ok, _ := watchRemove(seed.Value); ok {
+		} else if ok, _ := watchRemove(seedTarget(seed)); ok {
 			found("No longer watching %s", seed.Value)
 		}
 		return 0
@@ -302,8 +356,8 @@ func cmdWatch(args []string) int {
 			warn("%v", err)
 			return 1
 		}
-		watchAdd(seed.Value)
-		return watchOne(seed.Value, o)
+		watchAdd(seedTarget(seed))
+		return watchOne(seedTarget(seed), o)
 	case "run":
 		total := 0
 		ws := loadWatch()

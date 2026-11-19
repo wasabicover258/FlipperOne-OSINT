@@ -61,7 +61,7 @@ type Engine struct {
 	Progress func(msg string) // optional live progress output
 
 	mu       sync.Mutex
-	seen     map[string]bool
+	seen     map[string]int // key -> index in findings
 	findings []Finding
 	wg       sync.WaitGroup
 	sem      chan struct{}
@@ -127,7 +127,7 @@ func (e *Engine) Run(seed Finding) []Finding {
 			e.Scope = []string{"\x00"}
 		}
 	}
-	e.seen = map[string]bool{}
+	e.seen = map[string]int{}
 	e.limiters = map[string]*limiter{}
 	e.Errors = map[string]int{}
 	e.sem = make(chan struct{}, e.Workers)
@@ -183,7 +183,13 @@ func (e *Engine) InScope(f Finding) bool {
 		return false
 	case KASN:
 		return f.Data["relation"] == "" // upstreams/peers are context, not targets
-	case KLookalike, KIssue, KNetblock:
+	case KLEI:
+		return f.Data["relation"] == "" // parent companies are context, not targets
+	case KOrg, KPlace:
+		// Only a seed is looked up by name. Names found later (legal names,
+		// AS holders, POIs) are reported; following them is the user's call.
+		return f.Depth == 0
+	case KLookalike, KIssue, KNetblock, KAttr:
 		return false // reported, never expanded (no scope creep)
 	}
 	return true
@@ -196,11 +202,12 @@ func (e *Engine) add(f Finding) {
 	}
 	e.mu.Lock()
 	k := f.Key()
-	if e.seen[k] {
+	if i, dup := e.seen[k]; dup {
+		e.corroborate(&e.findings[i], f)
 		e.mu.Unlock()
 		return
 	}
-	e.seen[k] = true
+	e.seen[k] = len(e.findings)
 	e.findings = append(e.findings, f)
 	e.mu.Unlock()
 
@@ -215,6 +222,41 @@ func (e *Engine) add(f Finding) {
 		}
 		e.wg.Add(1)
 		go e.call(m, f)
+	}
+}
+
+// corroborate merges a duplicate into the stored finding: an independent
+// source is noted, and a stronger statement (higher confidence, e.g. an
+// LEI confirmed by GLEIF after a Wikidata name match) replaces the weaker
+// one. The entity is not expanded twice. Caller holds e.mu.
+func (e *Engine) corroborate(old *Finding, f Finding) {
+	sources := map[string]bool{old.Source: true, f.Source: true}
+	for _, x := range strings.Split(old.Data["also"], ",") {
+		sources[x] = true
+	}
+	// Copy on write: modules may still be reading the old Data map.
+	data := map[string]string{}
+	for k, v := range old.Data {
+		data[k] = v
+	}
+	if f.Confidence > old.Confidence {
+		for k, v := range f.Data {
+			data[k] = v
+		}
+		old.Confidence, old.Source, old.Module, old.Detail = f.Confidence, f.Source, f.Module, f.Detail
+	}
+	var also []string
+	for x := range sources {
+		if x != "" && x != old.Source {
+			also = append(also, x)
+		}
+	}
+	sort.Strings(also)
+	if len(also) > 0 {
+		data["also"] = strings.Join(also, ",")
+	}
+	if len(data) > 0 {
+		old.Data = data
 	}
 }
 

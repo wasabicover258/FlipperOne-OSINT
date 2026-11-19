@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"net"
 	"net/url"
 	"strings"
 	"sync"
@@ -13,10 +12,13 @@ import (
 func allModules() []*Module {
 	return []*Module{
 		modDNS, modWildcard, modPermute,
-		modCrtsh, modCertspotter, modWayback, modOTX, modURLScan, modHackerTarget,
+		modCrtsh, modCertspotter, modWayback, modArchive, modOTX, modURLScan, modHackerTarget,
 		modVTSubs, modSecurityTrails,
 		modCert, modTakeover, modExposure, modLookalike,
 		modInternetDB, modShodanHost, modRIPE, modASNPrefixes, modVuln,
+		modIPv6, modRDNS, modIPWhois,
+		modGLEIF, modWikidataOrg,
+		modGeocode, modGeoLinks, modGeoMeta, modReverseGeo, modOverpass, modWikiGeo,
 	}
 }
 
@@ -79,7 +81,7 @@ var modDNS = &Module{
 		}
 		for _, t := range []string{"A", "AAAA"} {
 			for _, ip := range res[t] {
-				if net.ParseIP(ip) != nil {
+				if ip = canonicalIP(ip); ip != "" {
 					out.Add(Finding{Type: KIP, Value: ip, Source: "dns", Confidence: 100, Detail: name + " " + t})
 				}
 			}
@@ -216,6 +218,31 @@ var modWayback = &Module{
 			}
 		}
 		addHosts(out, in.Value, "wayback", hs)
+		return nil
+	},
+}
+
+// modArchive reports when a site was first and last archived: first-seen
+// dates help to judge a domain's age and its history.
+var modArchive = &Module{
+	Name: "wayback-snapshots", Desc: "Wayback Machine: first/latest archived snapshot",
+	In: []Kind{KDomain}, Out: []Kind{KURL, KAttr}, Timeout: 30 * time.Second, Retries: 1,
+	Run: func(ctx context.Context, in Finding, out *Out) error {
+		for _, w := range []struct{ limit, label string }{{"1", "First archived"}, {"-1", "Latest archived"}} {
+			var rows [][]string
+			u := "https://web.archive.org/cdx/search/cdx?url=" + in.Value + "&output=json&fl=timestamp,original&filter=statuscode:200&limit=" + w.limit
+			if err := getJSON(ctx, u, nil, day, &rows); err != nil {
+				return err
+			}
+			if len(rows) < 2 || len(rows[1]) < 2 || len(rows[1][0]) < 8 {
+				return nil // never archived
+			}
+			ts, orig := rows[1][0], rows[1][1]
+			date := ts[:4] + "-" + ts[4:6] + "-" + ts[6:8]
+			out.Add(Finding{Type: KAttr, Value: w.label + ": " + date, Source: "wayback", Confidence: 95})
+			out.Add(Finding{Type: KURL, Value: "https://web.archive.org/web/" + ts + "/" + orig, Source: "wayback", Confidence: 95,
+				Detail: w.label + " snapshot (" + date + ")"})
+		}
 		return nil
 	},
 }
